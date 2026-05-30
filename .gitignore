@@ -3,3 +3,4 @@ __pycache__/
 bin/
 dist/
 Executables/
+ProjectStructure/gen_map.py
