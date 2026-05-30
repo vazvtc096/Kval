@@ -1,0 +1,211 @@
+{
+  "name": "kval-language-support",
+  "displayName": "Kval Language Support",
+  "description": "Kval 语言：语法高亮、LSP（补全/悬停/签名/导航）、诊断与运行。",
+  "version": "0.1.2",
+  "publisher": "kval",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Programming Languages",
+    "Linters",
+    "Snippets"
+  ],
+  "keywords": [
+    "kval"
+  ],
+  "activationEvents": [
+    "onDebug"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "languages": [
+      {
+        "id": "kval",
+        "aliases": [
+          "Kval",
+          "kval"
+        ],
+        "extensions": [
+          ".kval"
+        ],
+        "configuration": "./language-configuration.json",
+        "icon": {
+          "light": "./media/kval-icon.svg",
+          "dark": "./media/kval-icon.svg"
+        }
+      },
+      {
+        "id": "kvi",
+        "aliases": [
+          "Kval Stub Interface",
+          "kvi"
+        ],
+        "extensions": [
+          ".kvi"
+        ],
+        "configuration": "./language-configuration.json",
+        "icon": {
+          "light": "./media/kval-icon.svg",
+          "dark": "./media/kval-icon.svg"
+        }
+      }
+    ],
+    "grammars": [
+      {
+        "language": "kval",
+        "scopeName": "source.kval",
+        "path": "./syntaxes/kval.tmLanguage.json"
+      },
+      {
+        "language": "kvi",
+        "scopeName": "source.kvi",
+        "path": "./syntaxes/kvi.tmLanguage.json"
+      }
+    ],
+    "snippets": [
+      {
+        "language": "kval",
+        "path": "./snippets/kval.json"
+      }
+    ],
+    "configuration": {
+      "title": "Kval",
+      "properties": {
+        "kval.pythonPath": {
+          "type": "string",
+          "default": "python",
+          "description": "用于解析/诊断与运行的 Python 可执行文件。"
+        },
+        "kval.diagnosticsEnabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "是否在编辑时（去抖后）调用 Kval 解析器做诊断。"
+        },
+        "kval.diagnosticsDelayMs": {
+          "type": "number",
+          "default": 400,
+          "minimum": 100,
+          "description": "输入后触发诊断的去抖毫秒。"
+        },
+        "kval.workspaceRoot": {
+          "type": "string",
+          "default": "",
+          "description": "含 `Kval` 包的仓库根目录（留空则使用工作区首文件夹）。"
+        }
+      }
+    },
+    "commands": [
+      {
+        "command": "kval.runFile",
+        "title": "Kval: 运行当前文件",
+        "icon": "$(play)"
+      },
+      {
+        "command": "kval.compileFile",
+        "title": "Kval: 编译当前文件（生成 .kir）"
+      },
+      {
+        "command": "kval.showOutput",
+        "title": "Kval: 打开输出通道"
+      }
+    ],
+    "menus": {
+      "editor/title/run": [
+        {
+          "command": "kval.runFile",
+          "when": "editorLangId == kval",
+          "group": "navigation@1"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "kval.runFile",
+          "when": "editorLangId == kval"
+        },
+        {
+          "command": "kval.compileFile",
+          "when": "editorLangId == kval"
+        }
+      ]
+    },
+    "debuggers": [
+      {
+        "type": "kval",
+        "label": "Kval (Run Adapter)",
+        "languages": [
+          "kval",
+          "kvi"
+        ],
+        "configurationAttributes": {
+          "launch": {
+            "required": [
+              "program"
+            ],
+            "properties": {
+              "program": {
+                "type": "string",
+                "description": "要运行的 .kval 源文件路径"
+              },
+              "pythonPath": {
+                "type": "string",
+                "description": "Python 可执行文件（可省略，默认使用设置 kval.pythonPath）"
+              },
+              "pythonSysPathRoot": {
+                "type": "string",
+                "description": "PYTHONPATH 根目录（可省略，由扩展根据工作区自动填写）"
+              }
+            }
+          }
+        },
+        "initialConfigurations": [
+          {
+            "type": "kval",
+            "request": "launch",
+            "name": "Kval: 运行当前文件",
+            "program": "${file}"
+          }
+        ]
+      }
+    ]
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "lint": "eslint \"src/**/*.ts\"",
+    "format": "prettier --write \"src/**/*.ts\" \"*.json\"",
+    "format:check": "prettier --check \"src/**/*.ts\" \"*.json\"",
+    "package": "vsce package",
+    "vsix": "vsce package -o ../kval-language-support-%npm_package_version%.vsix"
+  },
+  "dependencies": {
+    "@vscode/debugadapter": "^1.68.0",
+    "vscode-languageclient": "^9.0.1",
+    "vscode-languageserver": "^9.0.1",
+    "vscode-languageserver-textdocument": "^1.0.11",
+    "vscode-uri": "^3.0.8"
+  },
+  "devDependencies": {
+    "@azure/identity": "^4.13.1",
+    "@types/node": "^20.11.0",
+    "@types/vscode": "^1.85.0",
+    "@vscode/debugprotocol": "^1.68.0",
+    "@vscode/vsce": "^3.2.1",
+    "@typescript-eslint/eslint-plugin": "^8.46.2",
+    "@typescript-eslint/parser": "^8.46.2",
+    "typescript": "^5.4.0",
+    "typescript-eslint": "^8.46.2",
+    "eslint": "^9.39.1",
+    "eslint-config-prettier": "^10.1.8",
+    "prettier": "^3.6.2",
+    "underscore": "^1.13.6",
+    "vsce": "^2.15.0"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://example.com/kval"
+  }
+}

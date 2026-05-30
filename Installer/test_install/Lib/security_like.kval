@@ -1,0 +1,127 @@
+#pragma once
+#include "char.kval"
+#include "string.kval"
+#include "string_ext.kval"
+
+bool hasLower(string s) {
+    for (string c : s) {
+        if (isLowerChar(c)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+bool hasUpper(string s) {
+    for (string c : s) {
+        if (isUpperChar(c)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+bool hasDigit(string s) {
+    for (string c : s) {
+        if (isDigitChar(c)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+bool hasSpecial(string s) {
+    for (string c : s) {
+        if (!isAlphaNumChar(c) && !isUnderscoreChar(c)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+int passwordStrengthScore(string s) {
+    int score = 0;
+    int len = length(s);
+    if (len >= 8) {
+        score += 1;
+    }
+    if (len >= 12) {
+        score += 1;
+    }
+    if (hasLower(s)) {
+        score += 1;
+    }
+    if (hasUpper(s)) {
+        score += 1;
+    }
+    if (hasDigit(s)) {
+        score += 1;
+    }
+    if (hasSpecial(s)) {
+        score += 1;
+    }
+    return score;
+}
+
+bool isStrongPassword(string s) {
+    return passwordStrengthScore(s) >= 5;
+}
+
+string maskMiddle(string s, int keepLeft, int keepRight) {
+    int len = length(s);
+    if (keepLeft < 0) {
+        keepLeft = 0;
+    }
+    if (keepRight < 0) {
+        keepRight = 0;
+    }
+    if (keepLeft + keepRight >= len) {
+        return s;
+    }
+    string left = "";
+    string right = "";
+    int i = 0;
+    for (string c : s) {
+        if (i < keepLeft) {
+            left += c;
+        }
+        i += 1;
+    }
+    int rstart = len - keepRight;
+    int j = 0;
+    for (string c2 : s) {
+        if (j >= rstart) {
+            right += c2;
+        }
+        j += 1;
+    }
+    return left + repeat("*", len - keepLeft - keepRight) + right;
+}
+
+string maskEmailSimple(string email) {
+    // Fallback: if advanced split/search is unavailable, perform simple scan.
+    int idx = 0;
+    int atPos = -1;
+    for (string c : email) {
+        if (c == "@") {
+            atPos = idx;
+            break;
+        }
+        idx += 1;
+    }
+    if (atPos <= 1) {
+        return email;
+    }
+    string user = "";
+    string domain = "";
+    int i = 0;
+    for (string c2 : email) {
+        if (i < atPos) {
+            user += c2;
+        } else {
+            domain += c2;
+        }
+        i += 1;
+    }
+    return maskMiddle(user, 1, 1) + domain;
+}

@@ -1,0 +1,45 @@
+// 控制流：if / elif / else、while、for 三段式、for 区间、switch
+
+int main() {
+  int a = 0;
+
+  if (0) {
+    a = 1;
+  } elif (1) {
+    a = 2;
+  } else {
+    a = 3;
+  }
+
+  int i = 0;
+  while (i < 3) {
+    a = a + 1;
+    i = i + 1;
+  }
+
+  for (int j = 0; j < 2; j = j + 1) {
+    a = a + 10;
+  }
+
+  int s = 0;
+  for (int ch : "ab") {
+    s = s + 1;
+  }
+
+  int x = 2;
+  switch (x) {
+    case (1) {
+      a = a + 100;
+    }
+    case (2) {
+      a = a + 200;
+    }
+    else {
+      a = a + 500;
+    }
+  }
+
+  print(a);
+  print(s);
+  return 0;
+}

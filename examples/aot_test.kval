@@ -1,0 +1,37 @@
+// AOT Native 测试文件
+// 仅使用 int/str 类型，无控制流，无类，无指针
+// 仅支持 print() 和 main() 函数调用
+
+int add(int a, int b) {
+  return a + b;
+}
+
+int mul(int a, int b) {
+  return a * b;
+}
+
+int calc(int x) {
+  int y = add(x, 10);
+  int z = mul(y, 2);
+  return z;
+}
+
+int main() {
+  int a = 42;
+  int b = 7;
+  int c = a + b;
+  print(c);
+  
+  int d = a * b;
+  print(d);
+  
+  int e = a - b;
+  print(e);
+  
+  int f = calc(5);
+  print(f);
+  
+  print("Hello from AOT Native!");
+  print(99);
+  return 0;
+}

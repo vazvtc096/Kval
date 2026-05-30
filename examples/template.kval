@@ -1,0 +1,9 @@
+template<typename T>
+T id(T x) {
+  return x;
+}
+
+int main() {
+  print(id<<int>>(41));
+  return 0;
+}

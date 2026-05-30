@@ -1,0 +1,89 @@
+#pragma once
+#include "string.kval"
+from py_std_text import normalize_slashes as __py_normalize_slashes;
+
+string normalizeSlashes(string p) {
+    return __py_normalize_slashes(p);
+}
+
+string basenameSimple(string p) {
+    string norm = normalizeSlashes(p);
+    string cur = "";
+    for (string c : norm) {
+        if (c == "/") {
+            cur = "";
+        } else {
+            cur += c;
+        }
+    }
+    return cur;
+}
+
+string dirnameSimple(string p) {
+    string norm = normalizeSlashes(p);
+    string out = "";
+    for (string c : norm) {
+        if (c == "/") {
+            out = "";
+        } else {
+            out += c;
+        }
+    }
+    int fullLen = 0;
+    for (string c2 : norm) {
+        fullLen += 1;
+    }
+    int baseLen = 0;
+    for (string c3 : out) {
+        baseLen += 1;
+    }
+    int need = fullLen - baseLen;
+    if (need <= 0) {
+        return "";
+    }
+    string dir = "";
+    int i = 0;
+    for (string c4 : norm) {
+        if (i < need - 1) {
+            dir += c4;
+        }
+        i += 1;
+    }
+    return dir;
+}
+
+string joinPath2(string a, string b) {
+    if (a == "") {
+        return normalizeSlashes(b);
+    }
+    if (b == "") {
+        return normalizeSlashes(a);
+    }
+    string na = normalizeSlashes(a);
+    string nb = normalizeSlashes(b);
+    string last = "";
+    for (string c : na) {
+        last = c;
+    }
+    if (last == "/") {
+        return na + nb;
+    }
+    return na + "/" + nb;
+}
+
+string extnameSimple(string p) {
+    string b = basenameSimple(p);
+    string ext = "";
+    int seenDot = 0;
+    for (string c : b) {
+        if (c == ".") {
+            ext = "";
+            seenDot = 1;
+        } else {
+            if (seenDot == 1) {
+                ext += c;
+            }
+        }
+    }
+    return ext;
+}

@@ -1,0 +1,50 @@
+// AOT 增强测试：位运算 (使用 ~ 位取反、& | ^ << >>)
+
+int bit_and(int a, int b) {
+  return a & b;
+}
+
+int bit_or(int a, int b) {
+  return a | b;
+}
+
+int bit_xor(int a, int b) {
+  return a ^ b;
+}
+
+int bit_shl(int a, int b) {
+  return a << b;
+}
+
+int bit_shr(int a, int b) {
+  return a >> b;
+}
+
+int main() {
+  print("=== Bitwise Operations ===");
+
+  int a = 255;
+  int b = 15;
+
+  // AND
+  print("255 & 15 = ");
+  print(bit_and(a, b));
+
+  // OR
+  print("255 | 15 = ");
+  print(bit_or(a, b));
+
+  // XOR
+  print("255 ^ 15 = ");
+  print(bit_xor(a, b));
+
+  // SHL
+  print("1 << 4 = ");
+  print(bit_shl(1, 4));
+
+  // SHR
+  print("255 >> 4 = ");
+  print(bit_shr(a, 4));
+
+  return 0;
+}

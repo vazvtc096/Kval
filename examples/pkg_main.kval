@@ -1,0 +1,8 @@
+from pkg1 import mod, answer;
+from pkg1.sub import calc;
+
+int main() {
+    mod.add(1, 0);
+    calc.calc(1, 0);
+    return answer(42, 0);
+}

@@ -1,0 +1,54 @@
+// AOT 增强测试：比较运算 (==, !=, <, >, <=, >=) + 逻辑非 (!)
+
+int main() {
+  print("=== Comparison & Logic Tests ===");
+
+  // 比较运算返回 bool，print 时转为 0/1
+  bool eq = 5 == 5;
+  print("5 == 5 = ");
+  print(eq);
+
+  bool neq = 5 != 5;
+  print("5 != 5 = ");
+  print(neq);
+
+  bool lt = 3 < 8;
+  print("3 < 8 = ");
+  print(lt);
+
+  bool gt = 10 > 10;
+  print("10 > 10 = ");
+  print(gt);
+
+  bool le = 10 <= 10;
+  print("10 <= 10 = ");
+  print(le);
+
+  bool ge = 7 >= 8;
+  print("7 >= 8 = ");
+  print(ge);
+
+  // 逻辑非 (!)
+  bool a = !0;
+  print("!0 = ");
+  print(a);
+
+  bool b = !5;
+  print("!5 = ");
+  print(b);
+
+  bool c = !!5;
+  print("!!5 = ");
+  print(c);
+
+  // 字符串比较
+  bool seq = "abc" == "abc";
+  print("abc == abc = ");
+  print(seq);
+
+  bool sne = "abc" != "xyz";
+  print("abc != xyz = ");
+  print(sne);
+
+  return 0;
+}

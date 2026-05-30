@@ -1,0 +1,80 @@
+#pragma once
+#include "string.kval"
+#include "char.kval"
+
+int length(string s) {
+    int n = 0;
+    for (string c : s) {
+        n += 1;
+    }
+    return n;
+}
+
+string trimLeftSpaces(string s) {
+    string out = "";
+    bool keep = false;
+    for (string c : s) {
+        if (!keep && c == " ") {
+            continue;
+        }
+        keep = true;
+        out += c;
+    }
+    return out;
+}
+
+string trimRightSpaces(string s) {
+    return reverse(trimLeftSpaces(reverse(s)));
+}
+
+string trimSpaces(string s) {
+    return trimRightSpaces(trimLeftSpaces(s));
+}
+
+bool startsWith(string s, string prefix) {
+    int i = 0;
+    for (string c : s) {
+        string pc = "";
+        int j = 0;
+        bool has = false;
+        for (string x : prefix) {
+            if (j == i) {
+                pc = x;
+                has = true;
+            }
+            j += 1;
+        }
+        if (!has) {
+            return true;
+        }
+        if (c != pc) {
+            return false;
+        }
+        i += 1;
+    }
+    return i >= length(prefix);
+}
+
+bool endsWith(string s, string suffix) {
+    return startsWith(reverse(s), reverse(suffix));
+}
+
+string removeAllChar(string s, string ch) {
+    string out = "";
+    for (string c : s) {
+        if (c != ch) {
+            out += c;
+        }
+    }
+    return out;
+}
+
+string keepOnlyIdentifierChars(string s) {
+    string out = "";
+    for (string c : s) {
+        if (isIdentifierChar(c)) {
+            out += c;
+        }
+    }
+    return out;
+}

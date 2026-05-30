@@ -1,0 +1,48 @@
+// AOT 增强测试：编译时常量 if/else
+
+int main() {
+  print("=== Compile-time If/Else Test ===");
+
+  // 情况1：条件为字面量真
+  if (1) {
+    print("Branch: 1 is truthy");
+  } else {
+    print("FAIL: 1 is NOT truthy");
+  }
+
+  // 情况2：条件为字面量假
+  if (0) {
+    print("FAIL: 0 is truthy");
+  } else {
+    print("Branch: 0 is falsy (else taken)");
+  }
+
+  // 情况3：比较运算条件（编译时可知）
+  if (10 > 5) {
+    print("Branch: 10 > 5 is true");
+  }
+
+  // 情况4：嵌套 if/else
+  if (1) {
+    print("Outer: 1 is true");
+    if (0) {
+      print("FAIL: inner 0 is truthy");
+    } else {
+      print("Inner: 0 is falsy (nested else)");
+    }
+  }
+
+  // 情况5：逻辑非条件
+  if (!0) {
+    print("Branch: !0 is true");
+  }
+
+  // 情况6：字符串比较条件
+  if ("hello" == "hello") {
+    print("Branch: hello == hello is true");
+  }
+
+  print("=== If/Else Test Complete ===");
+
+  return 0;
+}

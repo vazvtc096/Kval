@@ -1,0 +1,63 @@
+#include "core.kval"
+
+int main() {
+    print("== math ==");
+    print(gcd(84, 18));
+    print(lcm(21, 6));
+    print(pow(2, 10));
+
+    print("== typecast ==");
+    print(stringToInt("-123"));
+    print(intToString(-456));
+    print(stringToBool("true"));
+
+    print("== bitwise (python bridge) ==");
+    int a = 13;
+    int b = 10;
+    print(bitAnd(a, b));
+    print(bitOr(a, b));
+    print(bitXor(a, b));
+    print(shl(3, 4));
+    print(shr(64, 3));
+    print(toggleBit(8, 0));
+
+    print("== random (python bridge) ==");
+    srand(12345);
+    int r1 = rand();
+    int r2 = randRange(1, 100);
+    bool rb = randBool();
+    print(r1);
+    print(r2);
+    print(rb);
+
+    print("== path (python bridge normalize) ==");
+    string rawPath = "a\\b\\c.txt";
+    string normPath = normalizeSlashes(rawPath);
+    print("normalizeSlashes: " + normPath);
+    print("basenameSimple: " + basenameSimple(normPath));
+    print("dirnameSimple: " + dirnameSimple(normPath));
+    print("extnameSimple: " + extnameSimple(normPath));
+
+    print("== datetime-like ==");
+    print(formatDateTime(2026, 4, 25, 17, 14, 0));
+    print(daysInMonth(2024, 2));
+
+    print("== security-like ==");
+    string pwd = "Abc123!@#";
+    print(passwordStrengthScore(pwd));
+    print(isStrongPassword(pwd));
+    print("maskEmailSimple: " + maskEmailSimple("example_user@test.com"));
+
+    print("== encoding/hash ==");
+    print("intToHex(255): " + intToHex(255));
+    print(hexToInt("ff"));
+    print("intToBin(13): " + intToBin(13));
+    print(hashString("kval"));
+    print(checksumDigits("a1b2c3"));
+
+    print("== id ==");
+    print("uuidLike: " + uuidLike());
+    print("shortId: " + shortId());
+
+    return 0;
+}

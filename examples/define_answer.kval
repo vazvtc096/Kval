@@ -1,0 +1,6 @@
+#define ANSWER 41
+#define ANSWER 42
+int main() {
+  print(ANSWER);
+  return 0;
+}

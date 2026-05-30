@@ -1,0 +1,5 @@
+from mod_math import add as plus;
+
+int main() {
+    return plus(20, 22);
+}

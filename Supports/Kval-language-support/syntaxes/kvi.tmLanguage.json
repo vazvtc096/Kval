@@ -1,0 +1,76 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "Kval Stub Interface",
+  "scopeName": "source.kvi",
+  "patterns": [
+    { "include": "#preprocessor" },
+    { "include": "#comments" },
+    { "include": "#strings" },
+    { "include": "#stub-keywords" },
+    { "include": "#types" },
+    { "include": "#annotations" },
+    { "include": "#numbers" }
+  ],
+  "repository": {
+    "preprocessor": {
+      "patterns": [
+        {
+          "name": "meta.preprocessor.kvi",
+          "match": "^\\s*#\\s*(include|define|undef|pragma\\s+once)\\b.*$"
+        }
+      ]
+    },
+    "comments": {
+      "patterns": [
+        { "name": "comment.line.double-slash.kvi", "begin": "//", "end": "$" },
+        { "name": "comment.block.kvi", "begin": "/\\*", "end": "\\*/" }
+      ]
+    },
+    "strings": {
+      "patterns": [
+        { "name": "string.quoted.double.kvi", "begin": "\"", "end": "\"" },
+        { "name": "string.quoted.single.kvi", "begin": "'", "end": "'" }
+      ]
+    },
+    "stub-keywords": {
+      "patterns": [
+        {
+          "name": "keyword.declaration.kvi",
+          "match": "\\b(interface|class|struct|namespace|type|fn|extern|const|constexpr|public|private|protected|static|readonly|auto)\\b"
+        },
+        {
+          "name": "keyword.control.kvi",
+          "match": "\\b(return|if|else)\\b"
+        }
+      ]
+    },
+    "types": {
+      "patterns": [
+        {
+          "name": "entity.name.type.kvi",
+          "match": "\\b(int|long|float|double|bool|char|string|byte|short|uint|ulong|decimal|object|dynamic|void|[A-Z][A-Za-z0-9_]*)\\b"
+        }
+      ]
+    },
+    "annotations": {
+      "patterns": [
+        {
+          "name": "storage.type.annotation.kvi",
+          "match": "(?<=:)\\s*[A-Za-z_][\\w]*(?=\\b)"
+        },
+        {
+          "name": "entity.name.function.kvi",
+          "match": "\\b([A-Za-z_][\\w]*)\\s*(?=\\()"
+        }
+      ]
+    },
+    "numbers": {
+      "patterns": [
+        {
+          "name": "constant.numeric.kvi",
+          "match": "\\b0[xX][0-9a-fA-F]+\\b|\\b\\d+(\\.\\d+)?([eE][+-]?\\d+)?\\b"
+        }
+      ]
+    }
+  }
+}

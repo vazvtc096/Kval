@@ -1,0 +1,103 @@
+// 我的 AOT Native 测试文件
+// 仅使用 int/str 类型，无控制流，无类，无指针
+// 支持：print()、main()、函数调用、算术运算
+
+int add(int a, int b) {
+  return a + b;
+}
+
+int sub(int a, int b) {
+  return a - b;
+}
+
+int mul(int a, int b) {
+  return a * b;
+}
+
+int div(int a, int b) {
+  return a / b;
+}
+
+int mod(int a, int b) {
+  return a % b;
+}
+
+int neg(int a) {
+  return -a;
+}
+
+int calc(int x) {
+  int y = add(x, 10);
+  int z = mul(y, 2);
+  int w = sub(z, 5);
+  return w;
+}
+
+int main() {
+  print("=== Kval AOT Native Demo ===");
+  print("");
+  
+  print("Basic Arithmetic:");
+  
+  // 加法
+  int a = 42;
+  int b = 7;
+  int c = add(a, b);
+  print("42 + 7 = ");
+  print(c);
+  
+  // 减法
+  int d = sub(a, b);
+  print("42 - 7 = ");
+  print(d);
+  
+  // 乘法
+  int e = mul(a, b);
+  print("42 * 7 = ");
+  print(e);
+  
+  // 除法
+  int f = div(a, b);
+  print("42 / 7 = ");
+  print(f);
+  
+  // 取模
+  int g = mod(a, 5);
+  print("42 %% 5 = ");
+  print(g);
+  
+  // 负数
+  int h = neg(10);
+  print("-10 = ");
+  print(h);
+  
+  // 复合表达式
+  int i = a + b * 2 - 10;
+  print("42 + 7*2 - 10 = ");
+  print(i);
+  
+  // 函数链式调用
+  int j = calc(5);
+  print("calc(5) = ");
+  print(j);
+  
+  // 多个 print 连续输出
+  print("");
+  print("Multiple outputs:");
+  print(1);
+  print(2);
+  print(3);
+  print(4);
+  print(5);
+  
+  // 字符串输出
+  print("");
+  print("Hello from AOT Native!");
+  print("This executable has NO Python dependency.");
+  print("Compiled with NASM + GoLink.");
+  
+  print("");
+  print("=== Done! Return code: 0 ===");
+  
+  return 0;
+}

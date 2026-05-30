@@ -1,0 +1,17 @@
+#pragma once
+
+const int INT_MAX = 2147483647;
+
+const int BYTE_MIN = 0;
+const int BYTE_MAX = 255;
+
+const int BOOL_FALSE = 0;
+const int BOOL_TRUE = 1;
+
+const string EMPTY = "";
+const string NEWLINE = "\n";
+const string TAB = "\t";
+
+int intMinValue() {
+    return -2147483647 - 1;
+}

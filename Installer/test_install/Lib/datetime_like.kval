@@ -1,0 +1,67 @@
+#pragma once
+#include "typecast.kval"
+#include "string.kval"
+
+string twoDigits(int n) {
+    if (n < 0) {
+        n = 0;
+    }
+    if (n < 10) {
+        return "0" + intToString(n);
+    }
+    return intToString(n);
+}
+
+string fourDigits(int n) {
+    if (n < 0) {
+        n = 0;
+    }
+    if (n < 10) {
+        return "000" + intToString(n);
+    }
+    if (n < 100) {
+        return "00" + intToString(n);
+    }
+    if (n < 1000) {
+        return "0" + intToString(n);
+    }
+    return intToString(n);
+}
+
+string formatDate(int year, int month, int day) {
+    return fourDigits(year) + "-" + twoDigits(month) + "-" + twoDigits(day);
+}
+
+string formatTime(int hour, int minute, int second) {
+    return twoDigits(hour) + ":" + twoDigits(minute) + ":" + twoDigits(second);
+}
+
+string formatDateTime(int year, int month, int day, int hour, int minute, int second) {
+    return formatDate(year, month, day) + " " + formatTime(hour, minute, second);
+}
+
+bool isLeapYear(int year) {
+    if (year % 400 == 0) {
+        return true;
+    }
+    if (year % 100 == 0) {
+        return false;
+    }
+    return year % 4 == 0;
+}
+
+int daysInMonth(int year, int month) {
+    if (month == 1 || month == 3 || month == 5 || month == 7 || month == 8 || month == 10 || month == 12) {
+        return 31;
+    }
+    if (month == 4 || month == 6 || month == 9 || month == 11) {
+        return 30;
+    }
+    if (month == 2) {
+        if (isLeapYear(year)) {
+            return 29;
+        }
+        return 28;
+    }
+    return 0;
+}

@@ -1,0 +1,55 @@
+#pragma once
+#include "math.kval"
+
+int mod(int a, int b) {
+    if (b == 0) {
+        return 0;
+    }
+    return a % b;
+}
+
+int floorDiv(int a, int b) {
+    if (b == 0) {
+        return 0;
+    }
+    int q = a / b;
+    int r = a % b;
+    if (r != 0 && ((r > 0 && b < 0) || (r < 0 && b > 0))) {
+        q -= 1;
+    }
+    return q;
+}
+
+int ceilDiv(int a, int b) {
+    if (b == 0) {
+        return 0;
+    }
+    int q = a / b;
+    int r = a % b;
+    if (r != 0 && ((r > 0 && b > 0) || (r < 0 && b < 0))) {
+        q += 1;
+    }
+    return q;
+}
+
+int average2(int a, int b) {
+    return floorDiv(a + b, 2);
+}
+
+int average3(int a, int b, int c) {
+    return floorDiv(a + b + c, 3);
+}
+
+int distance(int a, int b) {
+    return abs(a - b);
+}
+
+int signStep(int x) {
+    if (x < 0) {
+        return -1;
+    }
+    if (x > 0) {
+        return 1;
+    }
+    return 0;
+}

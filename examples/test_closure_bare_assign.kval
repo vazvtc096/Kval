@@ -1,0 +1,13 @@
+void outer() {
+  int local::x = 1;
+  void inner() {
+    x = 2;
+  }
+  inner();
+  print(x);
+}
+
+int main() {
+  outer();
+  return 0;
+}

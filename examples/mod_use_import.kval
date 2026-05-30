@@ -1,0 +1,5 @@
+import mod_obj as m;
+
+int main() {
+    return m.value;
+}

@@ -1,0 +1,37 @@
+#pragma once
+
+bool isDigitChar(string c) {
+    return c >= "0" && c <= "9";
+}
+
+bool isLowerChar(string c) {
+    return c >= "a" && c <= "z";
+}
+
+bool isUpperChar(string c) {
+    return c >= "A" && c <= "Z";
+}
+
+bool isLetterChar(string c) {
+    return isLowerChar(c) || isUpperChar(c);
+}
+
+bool isAlphaNumChar(string c) {
+    return isLetterChar(c) || isDigitChar(c);
+}
+
+bool isUnderscoreChar(string c) {
+    return c == "_";
+}
+
+bool isIdentifierStartChar(string c) {
+    return isLetterChar(c) || isUnderscoreChar(c);
+}
+
+bool isIdentifierChar(string c) {
+    return isAlphaNumChar(c) || isUnderscoreChar(c);
+}
+
+bool isSpaceChar(string c) {
+    return c == " " || c == "\t" || c == "\n" || c == "\r";
+}

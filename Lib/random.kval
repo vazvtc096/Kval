@@ -1,0 +1,18 @@
+#pragma once
+from py_std_random import rand_secure as __py_rand_secure, rand_range_secure as __py_rand_range_secure, rand_bool as __py_rand_bool;
+
+void srand(int seed) {
+    // Python secure RNG is system-seeded; explicit seeding is intentionally ignored.
+}
+
+int rand() {
+    return __py_rand_secure();
+}
+
+int randRange(int lo, int hi) {
+    return __py_rand_range_secure(lo, hi);
+}
+
+bool randBool() {
+    return __py_rand_bool();
+}

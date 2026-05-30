@@ -1,0 +1,26 @@
+#pragma once
+#include "typecast.kval"
+
+void printInt(int n) {
+    print(n);
+}
+
+void printBool(bool b) {
+    print(boolToString(b));
+}
+
+void printLine(string s) {
+    print(s);
+}
+
+void printPairInt(int a, int b) {
+    print(intToString(a) + ", " + intToString(b));
+}
+
+void printLabelInt(string label, int n) {
+    print(label + ": " + intToString(n));
+}
+
+void printLabelBool(string label, bool b) {
+    print(label + ": " + boolToString(b));
+}

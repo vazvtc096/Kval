@@ -1,0 +1,6 @@
+int global::g = 0;
+
+void main() {
+  g = 1;
+  print(global::g);
+}

@@ -1,0 +1,7 @@
+// 第二次包含 inc_aux.kval 应被 #pragma once 跳过
+#include "inc_aux.kval"
+#include "inc_aux.kval"
+
+int main() {
+  return shared_counter;
+}

@@ -1,0 +1,2 @@
+export int value = 7;
+int hidden = 99;

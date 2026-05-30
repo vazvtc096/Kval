@@ -1,0 +1,50 @@
+#pragma once
+
+bool not(bool v) {
+    return !v;
+}
+
+bool and(bool a, bool b) {
+    return a && b;
+}
+
+bool or(bool a, bool b) {
+    return a || b;
+}
+
+bool xor(bool a, bool b) {
+    return (a && !b) || (!a && b);
+}
+
+int boolCount2(bool a, bool b) {
+    int c = 0;
+    if (a) {
+        c += 1;
+    }
+    if (b) {
+        c += 1;
+    }
+    return c;
+}
+
+int boolCount3(bool a, bool b, bool c) {
+    int n = 0;
+    if (a) {
+        n += 1;
+    }
+    if (b) {
+        n += 1;
+    }
+    if (c) {
+        n += 1;
+    }
+    return n;
+}
+
+bool all2(bool a, bool b) {
+    return a && b;
+}
+
+bool any2(bool a, bool b) {
+    return a || b;
+}

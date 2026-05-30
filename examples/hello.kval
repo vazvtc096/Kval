@@ -1,0 +1,14 @@
+// 示例：全局变量、显式作用域、varScopeOrder、main 入口
+
+int global::g = 0;
+
+void bump() {
+  global::g = global::g + 1;
+}
+
+int main() {
+  int local::x = 10;
+  bump();
+  print(global::g);
+  return 0;
+}

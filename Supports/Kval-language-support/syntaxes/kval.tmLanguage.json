@@ -1,0 +1,168 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "Kval",
+  "scopeName": "source.kval",
+  "patterns": [
+    { "include": "#preprocessor" },
+    { "include": "#comments" },
+    { "include": "#strings" },
+    { "include": "#imports" },
+    { "include": "#definitions" },
+    { "include": "#keywords" },
+    { "include": "#numbers" },
+    { "include": "#types" },
+    { "include": "#builtins" },
+    { "include": "#member-access" },
+    { "include": "#function-call" }
+  ],
+  "repository": {
+    "imports": {
+      "patterns": [
+        {
+          "name": "meta.import.kval",
+          "match": "^\\s*import\\s+([A-Za-z_][\\w]*(?:\\.[A-Za-z_][\\w]*)*)\\s*;",
+          "captures": {
+            "1": { "name": "entity.name.namespace.kval" }
+          }
+        },
+        {
+          "name": "meta.import.from.kval",
+          "match": "^\\s*from\\s+([A-Za-z_][\\w]*(?:\\.[A-Za-z_][\\w]*)*)\\s+import\\s+([A-Za-z_][\\w]*)\\b",
+          "captures": {
+            "1": { "name": "entity.name.namespace.kval" },
+            "2": { "name": "entity.name.type.kval" }
+          }
+        }
+      ]
+    },
+    "definitions": {
+      "patterns": [
+        {
+          "name": "meta.function.definition.kval",
+          "match": "^\\s*(?:(?:export|static|const|constexpr)\\s+)*(?!(?:import|from|as|if|elif|else|for|while|switch|case|return|delete|break|continue|try|catch|finally|namespace|class|struct|template|typename)\\b)([A-Za-z_][\\w]*)\\s+([A-Za-z_][\\w]*)\\s*(?=\\()",
+          "captures": {
+            "1": { "name": "storage.type.kval" },
+            "2": { "name": "entity.name.function.definition.kval" }
+          }
+        },
+        {
+          "name": "meta.variable.declaration.kval",
+          "match": "^\\s*(?:(?:export|static|const|constexpr)\\s+)*(?!(?:import|from|as|if|elif|else|for|while|switch|case|return|delete|break|continue|try|catch|finally|namespace|class|struct|template|typename)\\b)([A-Za-z_][\\w]*)\\s+((?:global|local|builtins|closure(?:\\{\\d+\\})?)::)?([A-Za-z_][\\w]*)\\b(?!\\s*\\()",
+          "captures": {
+            "1": { "name": "storage.type.kval" },
+            "2": { "name": "support.class.namespace.kval" },
+            "3": { "name": "variable.other.definition.kval" }
+          }
+        }
+      ]
+    },
+    "preprocessor": {
+      "patterns": [
+        {
+          "name": "meta.preprocessor.kval",
+          "match": "^\\s*#\\s*(include|define|undef|pragma\\s+once)\\b.*$"
+        }
+      ]
+    },
+    "comments": {
+      "patterns": [
+        {
+          "name": "comment.line.double-slash.kval",
+          "begin": "//",
+          "end": "$"
+        },
+        {
+          "name": "comment.block.kval",
+          "begin": "/\\*",
+          "end": "\\*/"
+        }
+      ]
+    },
+    "strings": {
+      "patterns": [
+        {
+          "name": "string.quoted.double.kval",
+          "begin": "\"",
+          "end": "\"",
+          "patterns": [{ "name": "constant.character.escape.kval", "match": "\\\\." }]
+        },
+        {
+          "name": "string.quoted.single.kval",
+          "begin": "'",
+          "end": "'",
+          "patterns": [{ "name": "constant.character.escape.kval", "match": "\\\\." }]
+        }
+      ]
+    },
+    "keywords": {
+      "patterns": [
+        {
+          "name": "keyword.control.kval",
+          "match": "\\b(return|delete|varScopeOrder|template|typename|class|struct|public|protected|private|code|New|operator|roperator|global|local|builtins|closure|this|base|true|false|if|elif|else|while|for|switch|case|break|continue|try|catch|finally|throw|import|from|as|export|namespace|const|static|constexpr|auto)\\b"
+        },
+        {
+          "name": "keyword.operator.kval",
+          "match": "(==|!=|<=|>=|&&|\\|\\||<<|>>|\\+\\+|--|->|\\+=|-=|\\*=|/=|%=|&=|\\|=|\\^=|<<=|>>=|=>)"
+        },
+        {
+          "name": "keyword.operator.kval",
+          "match": "[\\+\\-\\*/%&\\|\\^~!<>=\\?]"
+        }
+      ]
+    },
+    "numbers": {
+      "patterns": [
+        {
+          "name": "constant.numeric.kval",
+          "match": "\\b0[xX][0-9a-fA-F]+\\b|\\b\\d+(\\.\\d+)?([eE][+-]?\\d+)?\\b"
+        }
+      ]
+    },
+    "types": {
+      "patterns": [
+        {
+          "name": "entity.name.type.kval",
+          "match": "\\b(int|float|bool|void|string|array)\\b"
+        }
+      ]
+    },
+    "builtins": {
+      "patterns": [
+        {
+          "name": "support.function.builtin.kval",
+          "match": "\\b(print|input|ord|chr)\\b(?=\\s*\\()"
+        },
+        {
+          "name": "support.class.namespace.kval",
+          "match": "\\bbuiltins\\b(?=\\s*::)"
+        },
+        {
+          "name": "support.function.builtin.kval",
+          "match": "(?<=\\bbuiltins\\s*::\\s*)(print|input|ord|chr)\\b"
+        }
+      ]
+    },
+    "member-access": {
+      "patterns": [
+        {
+          "name": "variable.other.member.kval",
+          "match": "(?:(?:\\.|->)\\s*)([A-Za-z_][\\w]*)\\b",
+          "captures": {
+            "1": { "name": "variable.other.member.kval" }
+          }
+        }
+      ]
+    },
+    "function-call": {
+      "patterns": [
+        {
+          "name": "entity.name.function.kval",
+          "match": "\\b([A-Za-z_][\\w]*)\\s*(?=\\()",
+          "captures": {
+            "1": { "name": "entity.name.function.kval" }
+          }
+        }
+      ]
+    }
+  }
+}

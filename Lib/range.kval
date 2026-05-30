@@ -1,0 +1,37 @@
+#pragma once
+#include "math.kval"
+
+bool betweenInclusive(int x, int lo, int hi) {
+    return x >= lo && x <= hi;
+}
+
+bool betweenExclusive(int x, int lo, int hi) {
+    return x > lo && x < hi;
+}
+
+int clamp01(int x) {
+    return clamp(x, 0, 1);
+}
+
+int clampByte(int x) {
+    return clamp(x, 0, 255);
+}
+
+int wrapToRange(int x, int lo, int hi) {
+    if (lo > hi) {
+        int t = lo;
+        lo = hi;
+        hi = t;
+    }
+    int w = hi - lo + 1;
+    if (w <= 0) {
+        return lo;
+    }
+    while (x < lo) {
+        x += w;
+    }
+    while (x > hi) {
+        x -= w;
+    }
+    return x;
+}

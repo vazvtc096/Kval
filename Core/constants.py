@@ -1,0 +1,2 @@
+MAGIC_AST = 0xA5
+MAGIC_RPN = 0x5A
