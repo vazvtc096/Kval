@@ -1,0 +1,6 @@
+E:\Code\Kval\examples\aot_native_forloop.asm:86: error: label `kfn__46_forcond1' inconsistently redefined
+E:\Code\Kval\examples\aot_native_forloop.asm:22: info: label `kfn__46_forcond1' originally defined here
+E:\Code\Kval\examples\aot_native_forloop.asm:119: error: label `kfn__46_forstep3' inconsistently redefined
+E:\Code\Kval\examples\aot_native_forloop.asm:42: info: label `kfn__46_forstep3' originally defined here
+E:\Code\Kval\examples\aot_native_forloop.asm:129: error: label `kfn__46_endfor2' inconsistently redefined
+E:\Code\Kval\examples\aot_native_forloop.asm:52: info: label `kfn__46_endfor2' originally defined here

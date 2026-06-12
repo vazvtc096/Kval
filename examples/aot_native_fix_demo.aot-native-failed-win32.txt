@@ -1,0 +1,1 @@
+Kval\examples\aot_native_fix_demo.asm: fatal: unable to open output file `Kval\examples\aot_native_fix_demo_aot.obj'

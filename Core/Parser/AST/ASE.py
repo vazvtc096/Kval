@@ -76,7 +76,10 @@ class BreakStmtNode(ASTNode):
         return []
 
     def asm(self, ctx: AsmContext) -> list[Insn]:
-        return []
+        labels = ctx.current_loop_labels()
+        if labels is None:
+            return []
+        return [("jmp", labels[0])]
 
 
 class ContinueStmtNode(ASTNode):
@@ -89,7 +92,10 @@ class ContinueStmtNode(ASTNode):
         return []
 
     def asm(self, ctx: AsmContext) -> list[Insn]:
-        return []
+        labels = ctx.current_loop_labels()
+        if labels is None:
+            return []
+        return [("jmp", labels[1])]
 
 
 def _matches_exception_type(exc: BaseException, type_name: str | None) -> bool:
@@ -897,7 +903,25 @@ class IfStmtNode(ASTNode):
         return []
 
     def asm(self, ctx: AsmContext) -> list[Insn]:
-        return []
+        insns: list[Insn] = []
+        end_label = ctx.fresh_label("endif")
+        for i, (cond, block) in enumerate(self.branches):
+            is_last = (i == len(self.branches) - 1) and self.else_block is None
+            if is_last:
+                # Last branch with no else: condition jumps to end on false
+                next_label = end_label
+            else:
+                next_label = ctx.fresh_label("else")
+            insns.extend(cond.asm(ctx))
+            insns.append(("jz", next_label))
+            insns.extend(flatten_stmt_asm(block.statements, ctx))
+            if not is_last:
+                insns.append(("jmp", end_label))
+                insns.append(("label", next_label))
+        if self.else_block is not None:
+            insns.extend(flatten_stmt_asm(self.else_block.statements, ctx))
+        insns.append(("label", end_label))
+        return insns
 
 
 class WhileStmtNode(ASTNode):
@@ -920,7 +944,18 @@ class WhileStmtNode(ASTNode):
         return []
 
     def asm(self, ctx: AsmContext) -> list[Insn]:
-        return []
+        start_label = ctx.fresh_label("while")
+        end_label = ctx.fresh_label("endwhile")
+        continue_label = start_label  # continue goes back to condition check
+        ctx.push_loop(end_label, continue_label)
+        insns: list[Insn] = [("label", start_label)]
+        insns.extend(self.cond.asm(ctx))
+        insns.append(("jz", end_label))
+        insns.extend(flatten_stmt_asm(self.body.statements, ctx))
+        insns.append(("jmp", start_label))
+        insns.append(("label", end_label))
+        ctx.pop_loop()
+        return insns
 
 
 class ForCStmtNode(ASTNode):
@@ -952,7 +987,25 @@ class ForCStmtNode(ASTNode):
         return []
 
     def asm(self, ctx: AsmContext) -> list[Insn]:
-        return []
+        insns: list[Insn] = []
+        if self.init is not None:
+            insns.extend(self.init.asm(ctx))
+        cond_label = ctx.fresh_label("forcond")
+        end_label = ctx.fresh_label("endfor")
+        step_label = ctx.fresh_label("forstep")
+        ctx.push_loop(end_label, step_label)
+        insns.append(("label", cond_label))
+        if self.cond is not None:
+            insns.extend(self.cond.asm(ctx))
+            insns.append(("jz", end_label))
+        insns.extend(flatten_stmt_asm(self.body.statements, ctx))
+        insns.append(("label", step_label))
+        if self.step is not None:
+            insns.extend(self.step.asm(ctx))
+        insns.append(("jmp", cond_label))
+        insns.append(("label", end_label))
+        ctx.pop_loop()
+        return insns
 
 
 class ForRangeStmtNode(ASTNode):
@@ -984,7 +1037,48 @@ class ForRangeStmtNode(ASTNode):
         return []
 
     def asm(self, ctx: AsmContext) -> list[Insn]:
-        return []
+        insns: list[Insn] = []
+        # 声明循环变量
+        insns.append(("decl", self.elem_type, self.var_name))
+        # 计算迭代范围：iterable_expr 返回上限值（如 range(n) → n）
+        insns.extend(self.iterable_expr.asm(ctx))
+        # 存到临时变量
+        limit_name = ctx.fresh_label("limit")
+        insns.append(("decl", "int", limit_name))
+        insns.append(("store_decl_local", limit_name))
+
+        start_label = ctx.fresh_label("forrange")
+        end_label = ctx.fresh_label("endforrange")
+        step_label = ctx.fresh_label("forrangestep")
+
+        # 初始化循环变量为 0
+        insns.append(("const", 0))
+        insns.append(("store", self.var_name))
+
+        ctx.push_loop(end_label, step_label)
+
+        # 循环条件: var < limit
+        insns.append(("label", start_label))
+        insns.append(("load", limit_name))
+        insns.append(("load", self.var_name))
+        insns.append(("binop", "lt"))
+        insns.append(("jz", end_label))
+
+        # 循环体
+        insns.extend(flatten_stmt_asm(self.body.statements, ctx))
+
+        # 递增
+        insns.append(("label", step_label))
+        insns.append(("load", self.var_name))
+        insns.append(("const", 1))
+        insns.append(("binop", "add"))
+        insns.append(("store", self.var_name))
+        insns.append(("jmp", start_label))
+
+        insns.append(("label", end_label))
+        insns.append(("pop",))  # clean up limit
+        ctx.pop_loop()
+        return insns
 
 
 class SwitchStmtNode(ASTNode):
@@ -1272,7 +1366,7 @@ def _stmt_might_have_logical_sc(s) -> bool:
 
 
 def statements_need_ast_fallback(stmts: list) -> bool:
-    cf_types = (IfStmtNode, WhileStmtNode, ForCStmtNode, ForRangeStmtNode, SwitchStmtNode, TryStmtNode, ThrowStmtNode)
+    cf_types = (SwitchStmtNode, TryStmtNode, ThrowStmtNode)
     for s in stmts:
         if isinstance(s, cf_types):
             return True
@@ -1366,8 +1460,8 @@ class FunctionDefNode(ASTNode):
         ]
 
     def asm(self, ctx: AsmContext) -> list[Insn]:
-        sub = AsmContext()
-        body_insns = flatten_stmt_asm(self.body.statements, sub)
+        # 复用父级 ctx，确保整个模块的标签编号全局唯一
+        body_insns = flatten_stmt_asm(self.body.statements, ctx)
         return [
             (
                 "define",

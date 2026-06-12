@@ -1,0 +1,27 @@
+// AOT-Native 测试：基础算术 + print
+// 测试：编译时计算 和 运行时计算
+
+int add(int a, int b) {
+  return a + b;
+}
+
+int main() {
+  int x = 10;
+  int y = 32;
+  int sum = add(x, y);
+  print(sum);  // 应输出 42
+
+  int diff = y - x;
+  print(diff);  // 应输出 22
+
+  int prod = x * 3;
+  print(prod);  // 应输出 30
+
+  int quot = y / 2;
+  print(quot);  // 应输出 16
+
+  int rem = y % 3;
+  print(rem);   // 应输出 2
+
+  return 0;
+}

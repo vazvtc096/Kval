@@ -1,0 +1,5 @@
+This executable was built by Kval native AOT (no Python runtime required).
+Linker: E:\Code\executables\mingw64\bin\gcc.EXE
+Pipeline: Kval AST → ASM IR → NASM .asm → nasm → object → link (gcc/clang or Windows GoLink + msvcrt).
+Supports: int/str/bool, arithmetic, comparisons, if/else, while, for, function calls.
+A sibling .asm file is kept next to this executable.

@@ -1,0 +1,11 @@
+// Minimal struct test
+struct Point {
+    int x;
+    int y;
+}
+
+int main() {
+    int result = 42;
+    print(result);
+    return 0;
+}

@@ -1,0 +1,35 @@
+// AOT-Native 测试：if/else + while 控制流
+// 测试运行时条件判断 和循环
+
+int compute(int n) {
+  int result = 0;
+  int i = 0;
+  while (i < n) {
+    result = result + (i + 1);
+    i = i + 1;
+  }
+  return result;  // 1+2+...+n = n*(n+1)/2
+}
+
+int main() {
+  int n = 10;
+  int sum = compute(n);
+  print(sum);  // 应输出 55 (1+2+...+10)
+
+  // if/else 测试
+  int x = 42;
+  if (x > 40) {
+    print(x);   // 应输出 42
+  } else {
+    print(0);
+  }
+
+  int y = 20;
+  if (y > 40) {
+    print(y);
+  } else {
+    print(y);   // 应输出 20
+  }
+
+  return 0;
+}

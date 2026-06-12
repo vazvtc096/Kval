@@ -1,0 +1,31 @@
+// Test class/struct and throw/try don't block AOT-Native compilation
+// These features use AST fallback for their function bodies
+
+struct Point {
+    int x;
+    int y;
+}
+
+class Counter {
+    int value;
+    void increment() {
+        value = value + 1;
+    }
+}
+
+int main() {
+    // Basic operations still work
+    int a = 10;
+    int b = 20;
+    int sum = a + b;
+    print(sum);  // 30
+
+    // Simple if/else
+    if (sum == 30) {
+        print(100);
+    } else {
+        print(0);
+    }
+
+    return 0;
+}

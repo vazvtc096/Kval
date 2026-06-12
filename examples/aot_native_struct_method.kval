@@ -1,0 +1,11 @@
+struct Counter {
+    int value;
+}
+
+int main() {
+    Counter c;
+    c.value = 0;
+    c.value = c.value + 1;
+    print(c.value);
+    return 0;
+}

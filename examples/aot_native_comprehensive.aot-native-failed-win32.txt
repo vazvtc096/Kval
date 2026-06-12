@@ -1,0 +1,6 @@
+E:\Code\Kval\examples\aot_native_comprehensive.asm:446: error: symbol `True' not defined
+E:\Code\Kval\examples\aot_native_comprehensive.asm:454: error: symbol `True' not defined
+E:\Code\Kval\examples\aot_native_comprehensive.asm:467: error: symbol `True' not defined
+E:\Code\Kval\examples\aot_native_comprehensive.asm:480: error: symbol `True' not defined
+E:\Code\Kval\examples\aot_native_comprehensive.asm:493: error: symbol `True' not defined
+E:\Code\Kval\examples\aot_native_comprehensive.asm:506: error: symbol `True' not defined

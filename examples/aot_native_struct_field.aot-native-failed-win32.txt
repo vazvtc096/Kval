@@ -1,0 +1,2 @@
+E:\Code\Kval\examples\aot_native_struct_field.asm:18: error: symbol `malloc' not defined
+E:\Code\Kval\examples\aot_native_struct_field.asm:73: error: symbol `free' not defined

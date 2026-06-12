@@ -161,11 +161,27 @@ class BinOpNode(ASTNode):
         ]
 
     def asm(self, ctx: AsmContext) -> list[Insn]:
+        # 检测是否为浮点运算
+        op_name = self.op.name
+        if self._both_floats():
+            float_ops = {
+                "add": "fadd", "sub": "fsub", "mul": "fmul", "div": "fdiv",
+                "lt": "flt", "le": "fle", "gt": "fgt", "ge": "fge",
+                "eq": "feq", "ne": "fne",
+            }
+            op_name = float_ops.get(self.op.name, self.op.name)
         return [
             *self.left.asm(ctx),
             *self.right.asm(ctx),
-            ("binop", self.op.name),
+            ("binop", op_name),
         ]
+
+    def _both_floats(self) -> bool:
+        """检测两个操作数是否都为浮点字面量。"""
+        return (
+            isinstance(self.left, LiteralsNode) and isinstance(self.left.value, float)
+            and isinstance(self.right, LiteralsNode) and isinstance(self.right.value, float)
+        )
 
 
 def _eval_binop_py(a, op: BinOperator, b):
@@ -265,7 +281,10 @@ class UnaryOpNode(ASTNode):
         return [*self.value.bytecode(), (self.op.value[0], 1)]
 
     def asm(self, ctx: AsmContext) -> list[Insn]:
-        return [*self.value.asm(ctx), ("unary", self.op.name)]
+        op_name = self.op.name
+        if self.op == UnaryOperator.neg and isinstance(self.value, LiteralsNode) and isinstance(self.value.value, float):
+            op_name = "fneg"
+        return [*self.value.asm(ctx), ("unary", op_name)]
 
 
 class VariableLoadNode(ASTNode):
@@ -523,7 +542,10 @@ class FunctionCallNode(ASTNode):
         for k in keys:
             ins.extend(self.kwargs[k].asm(ctx))
         fname = getattr(self.func, "name", None)
-        if fname is not None:
+        if fname == "range":
+            # range(n) → 推入 n 作为上限值（ForRangeStmtNode 使用）
+            pass  # 参数已在栈上
+        elif fname is not None:
             ins.append(("call", fname, len(self.args), keys))
         else:
             ins.extend(self.func.asm(ctx))

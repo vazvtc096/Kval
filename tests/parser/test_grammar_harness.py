@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from tests.grammar_doc_harness import CASES, _run
+from Kval.tests.grammar_doc_harness import CASES, _run
 
 
 @pytest.mark.parametrize(("case_name", "src", "run_eval"), CASES, ids=[c[0] for c in CASES])

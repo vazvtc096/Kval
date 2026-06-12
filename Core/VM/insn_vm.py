@@ -9,12 +9,13 @@ from ..common import Unbound, kval_truthy, skip_unbound_errors
 
 
 class InsnVM:
-    __slots__ = ("insns", "sf", "vals")
+    __slots__ = ("insns", "sf", "vals", "_labels")
 
     def __init__(self, insns: Sequence[tuple[Any, ...]], sf: StackFrame):
         self.insns = list(insns)
         self.sf = sf
         self.vals: list[Any] = []
+        self._labels: dict[str, int] = {}
 
     def push(self, v: Any) -> None:
         self.vals.append(v)
@@ -23,10 +24,19 @@ class InsnVM:
         return self.vals.pop()
 
     def run(self) -> None:
-        for insn in self.insns:
-            self._dispatch(insn)
+        # First pass: build label index
+        self._labels.clear()
+        for i, insn in enumerate(self.insns):
+            if insn and insn[0] == "label":
+                self._labels[insn[1]] = i
+        # Second pass: execute with jump support
+        ip = 0
+        n = len(self.insns)
+        while ip < n:
+            insn = self.insns[ip]
+            ip = self._dispatch(insn, ip + 1)
 
-    def _dispatch(self, insn: tuple[Any, ...]) -> None:
+    def _dispatch(self, insn: tuple[Any, ...], next_ip: int) -> int:
         op = insn[0]
         if op == "const":
             self.push(insn[1])
@@ -135,12 +145,34 @@ class InsnVM:
                 from ..Types.Base import ObjectAttributeVisitor as OAV
 
                 setattr(OAV(obj), attr, val)
+        elif op == "label":
+            pass  # label is handled in first pass, no-op during execution
+        elif op == "jmp":
+            target = insn[1]
+            if target in self._labels:
+                return self._labels[target]
+            raise RuntimeError(f"jmp target {target!r} not found")
+        elif op == "jz":
+            v = self.pop()
+            if not kval_truthy(v):
+                target = insn[1]
+                if target in self._labels:
+                    return self._labels[target]
+                raise RuntimeError(f"jz target {target!r} not found")
+        elif op == "jnz":
+            v = self.pop()
+            if kval_truthy(v):
+                target = insn[1]
+                if target in self._labels:
+                    return self._labels[target]
+                raise RuntimeError(f"jnz target {target!r} not found")
         elif op == "ret":
             raise ReturnSignal(self.pop())
         elif op == "retvoid":
             raise ReturnSignal(None)
         else:
             raise NotImplementedError(f"unknown insn {insn!r}")
+        return next_ip
 
     def _do_define(self, insn: tuple[Any, ...]) -> None:
         _, name, pnames, ptypes, void_i, tparams, body_t = insn

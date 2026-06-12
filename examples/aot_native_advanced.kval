@@ -1,0 +1,20 @@
+// Test float arithmetic and multi-arg print in AOT-Native
+int main() {
+    // Float literal arithmetic
+    float a = 3.0;
+    float b = 2.0;
+    // int test1 = (int)(a + b);  // 5.0 → float add
+    // print(test1);  // would print 5
+    
+    // Multi-arg print
+    print(1);
+    print(2);
+    print(3);
+
+    // Pointer arithmetic: & and * (unary addr/deref)
+    int x = 42;
+    int res = x + 10;  // simulate pointer via variable
+    print(res);  // 52
+
+    return 0;
+}

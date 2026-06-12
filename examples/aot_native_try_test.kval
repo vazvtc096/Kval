@@ -1,0 +1,20 @@
+// Test throw/try doesn't block AOT-Native compilation
+// throw/try function bodies use AST evaluation fallback
+
+int divide(int a, int b) {
+    if (b == 0) {
+        throw "division by zero";
+    }
+    return a / b;
+}
+
+int main() {
+    int result = divide(100, 5);
+    print(result);  // 20
+
+    // Simple operations still work
+    int x = 42;
+    print(x);  // 42
+
+    return 0;
+}
