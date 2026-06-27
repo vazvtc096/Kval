@@ -4,4 +4,6 @@ bin/
 dist/
 Executables/
 ProjectStructure/gen_map.py
-.workbuddy
+.workbuddy/
+benchmark/
+nuitka-crash-report.xml
