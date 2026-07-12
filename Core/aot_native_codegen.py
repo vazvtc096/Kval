@@ -1,6 +1,8 @@
 """将 ASM IR 指令编译为真正的 x64 NASM 汇编代码。
 
 支持在运行时实际执行计算，而非仅编译时静态求值。
+本模块修复了 Windows x64 下 push 64 位立即数导致的链接错误，
+并正确实现了 print 内部函数（动态格式串 + 寄存器传参）。
 """
 
 from __future__ import annotations
@@ -12,10 +14,14 @@ from .Parser.AST.asm_ir import Insn
 from .Parser.AST.Data import BinOperator
 
 
+# ---------------------------------------------------------------------------
+# 辅助数据结构
+# ---------------------------------------------------------------------------
+
 @dataclass
 class _VarSlot:
     name: str
-    offset: int       # rbp 相对偏移（正值表示 rbp - offset）
+    offset: int          # rbp 相对偏移（rbp - offset）
     size: int = 8
 
 
@@ -51,16 +57,19 @@ class _FuncInfo:
 
 @dataclass
 class _CodegenContext:
+    """汇编生成上下文，管理字符串常量、结构体布局、外部 DLL 函数等。"""
     win64: bool = False
     str_literals: list[str] = field(default_factory=list)
     funcs: list[_FuncInfo] = field(default_factory=list)
     main_body: tuple[Insn, ...] = ()
-    main_has_print: bool = False
     _str_index: dict[str, int] = field(default_factory=dict, repr=False)
     _structs: dict[str, _StructLayout] = field(default_factory=dict, repr=False)
     _has_malloc: bool = field(default=False, repr=False)
-    # 追踪堆分配的变量名（用于 RAII 自动释放）
     _heap_vars: set[str] = field(default_factory=set, repr=False)
+    extern_dll_funcs: list[tuple[str, str, tuple[str, ...], tuple[str, ...], str, bool]] = field(
+        default_factory=list, repr=False
+    )
+    extern_dll_names: dict[str, list[str]] = field(default_factory=dict, repr=False)
 
     def add_string(self, s: str) -> int:
         if s not in self._str_index:
@@ -81,6 +90,10 @@ class _CodegenContext:
     def add_heap_var(self, name: str) -> None:
         self._heap_vars.add(name)
 
+
+# ---------------------------------------------------------------------------
+# 操作符 → NASM 助记符映射
+# ---------------------------------------------------------------------------
 
 def _binop_nasm(op_name: str) -> str | None:
     mapping = {
@@ -110,6 +123,10 @@ def _cmp_nasm(op_name: str) -> str:
     return mapping.get(op_name, "e")
 
 
+# ---------------------------------------------------------------------------
+# 预处理：收集字符串、结构体、外部函数
+# ---------------------------------------------------------------------------
+
 def _collect_strings_from_insns(insns: tuple[Insn, ...], ctx: _CodegenContext) -> None:
     for insn in insns:
         if not insn:
@@ -123,6 +140,11 @@ def _collect_strings_from_insns(insns: tuple[Insn, ...], ctx: _CodegenContext) -
         elif op == "class_def":
             _, _, body_t = insn
             _collect_strings_from_insns(tuple(body_t), ctx)
+        elif op == "extern_dll":
+            _, dll_path, func_tuple = insn
+            for rt, fn, pt_tuple, pn_tuple, void_i in func_tuple:
+                ctx.extern_dll_funcs.append((dll_path, fn, pt_tuple, pn_tuple, rt, bool(void_i)))
+                ctx.extern_dll_names.setdefault(dll_path, []).append(fn)
 
 
 def _build_struct_layouts(module_insns: tuple[Insn, ...], ctx: _CodegenContext) -> None:
@@ -143,10 +165,14 @@ def _build_struct_layouts(module_insns: tuple[Insn, ...], ctx: _CodegenContext) 
 
 
 def _sanitize_label(name: str) -> str:
+    """将 Kval 函数名转换为合法的 NASM 标签。"""
+    if name == 'main':
+        return 'kfn_main'
+
     safe = "".join(c if c.isalnum() or c == "_" else f"_{ord(c)}_" for c in name)
     if safe[0].isdigit():
         safe = "_" + safe
-    return f"kfn_{safe}"
+    return safe
 
 
 def _scan_locals(
@@ -156,7 +182,7 @@ def _scan_locals(
     ctx: _CodegenContext,
     param_names: tuple[str, ...] = (),
 ) -> int:
-    """扫描指令，为局部变量分配栈槽位。返回下一个可用偏移。"""
+    """扫描指令，为局部变量分配栈槽位，返回下一个可用偏移。"""
     offset = 8
     for pname in param_names:
         if pname not in slots:
@@ -188,17 +214,18 @@ def _scan_locals(
     return offset
 
 
+# ---------------------------------------------------------------------------
+# 内存管理辅助函数
+# ---------------------------------------------------------------------------
+
 def _emit_malloc(lines: list[str], size: int, ctx: _CodegenContext) -> None:
-    """生成调用 malloc(size) 并 push 结果的代码。"""
     ctx.note_malloc_used()
     if ctx.win64:
-        lines.append("    ; malloc(%d)" % size)
         lines.append("    sub rsp, 32")
         lines.append("    mov ecx, %d" % size)
         lines.append("    call malloc")
         lines.append("    add rsp, 32")
     else:
-        lines.append("    ; malloc(%d)" % size)
         lines.append("    mov edi, %d" % size)
         lines.append("    xor eax, eax")
         lines.append("    call malloc")
@@ -206,7 +233,6 @@ def _emit_malloc(lines: list[str], size: int, ctx: _CodegenContext) -> None:
 
 
 def _emit_free(lines: list[str], ctx: _CodegenContext) -> None:
-    """生成 pop 指针并调用 free(ptr) 的代码。"""
     ctx.note_malloc_used()
     lines.append("    pop rdi")
     if ctx.win64:
@@ -219,10 +245,12 @@ def _emit_free(lines: list[str], ctx: _CodegenContext) -> None:
         lines.append("    call free")
 
 
-def _emit_function(
-    func: _FuncInfo,
-    ctx: _CodegenContext,
-) -> list[str]:
+# ---------------------------------------------------------------------------
+# 函数整体编译
+# ---------------------------------------------------------------------------
+
+def _emit_function(func: _FuncInfo, ctx: _CodegenContext) -> list[str]:
+    """生成一个 Kval 函数的 NASM 代码，包含栈帧、局部变量初始化、RAII 清理。"""
     lines: list[str] = []
     func_label = _sanitize_label(func.name)
     lines.append(f"{func_label}:")
@@ -231,7 +259,6 @@ def _emit_function(
     struct_vars: set[str] = set()
     next_offset = _scan_locals(func.body_insns, local_slots, struct_vars, ctx, func.param_names)
 
-    # 计算栈帧总大小
     total_local = 0
     for slot in local_slots.values():
         total_local += slot.size
@@ -240,12 +267,12 @@ def _emit_function(
     if local_size < min_size:
         local_size = min_size
 
-    # Prologue
+    # prologue
     lines.append("    push rbp")
     lines.append("    mov rbp, rsp")
     lines.append(f"    sub rsp, {local_size}")
 
-    # 初始化参数到局部变量
+    # 初始化参数变量
     if func.param_names:
         param_regs = (["rcx", "rdx", "r8", "r9"] if ctx.win64
                       else ["rdi", "rsi", "rdx", "rcx", "r8", "r9"])
@@ -259,21 +286,17 @@ def _emit_function(
                     lines.append(f"    mov rax, [rbp + {sp_offset}]")
                     lines.append(f"    mov [rbp - {slot.offset}], rax")
 
-    # 为 struct 变量分配堆内存（RAII 基础）
+    # 为 struct 变量堆分配内存
     for name in struct_vars:
         if name in local_slots:
             slot = local_slots[name]
-            sl = ctx.get_struct(slot.size)
-            if sl is None:
-                # 通过变量类型查找
-                for s in ctx._structs.values():
-                    if s.total_size == slot.size or True:
-                        sl = s
-                        break
+            sl = None
+            for s in ctx._structs.values():
+                if s.total_size == slot.size or True:
+                    sl = s
+                    break
             alloc_size = sl.total_size if sl else slot.size
-            # 调用 malloc
             ctx.note_malloc_used()
-            lines.append(f"    ; malloc for struct {name} (size={alloc_size})")
             if ctx.win64:
                 lines.append("    sub rsp, 32")
                 lines.append(f"    mov ecx, {alloc_size}")
@@ -283,21 +306,16 @@ def _emit_function(
                 lines.append(f"    mov edi, {alloc_size}")
                 lines.append("    xor eax, eax")
                 lines.append("    call malloc")
-            # 将返回的指针存入局部变量槽位
             lines.append(f"    mov [rbp - {slot.offset}], rax")
-            # 记录为堆分配变量（用于 RAII 自动释放）
             ctx.add_heap_var(name)
 
-    # 生成函数体指令
-    body_lines, _ = _emit_insns(
-        list(func.body_insns), local_slots, struct_vars, ctx
-    )
+    # 生成指令体
+    body_lines, _ = _emit_insns(list(func.body_insns), local_slots, struct_vars, ctx)
 
-    # RAII：在函数返回前释放所有堆分配变量
+    # RAII 释放堆变量
     raii_lines: list[str] = []
     if ctx._heap_vars:
-        raii_lines.append("    ; RAII cleanup")
-        raii_lines.append("    push rax              ; 保存返回值")
+        raii_lines.append("    push rax")
         for name in ctx._heap_vars:
             if name in local_slots:
                 slot = local_slots[name]
@@ -313,9 +331,8 @@ def _emit_function(
                     raii_lines.append("    xor eax, eax")
                     raii_lines.append("    call free")
                 raii_lines.append(f"_skip_free_{func_label}_{slot.offset}:")
-        raii_lines.append("    pop rax               ; 恢复返回值")
+        raii_lines.append("    pop rax")
 
-    # 确保函数有返回
     has_ret = False
     for insn in reversed(list(func.body_insns)):
         if insn and insn[0] in ("ret", "retvoid", "jmp"):
@@ -323,18 +340,16 @@ def _emit_function(
             break
 
     if has_ret:
-        # 在 body_lines 中寻找最后的 leave/ret 或 jmp，将 RAII 插入其前面
+        # 将 RAII 插入到 epilogue 之前
         insert_pos = len(body_lines)
         for idx in range(len(body_lines) - 1, -1, -1):
             stripped = body_lines[idx].strip()
             if stripped in ("leave", "ret") or stripped.startswith("jmp "):
                 insert_pos = idx
             elif stripped and not stripped.startswith(";") and stripped not in ("leave", "ret"):
-                break  # 非 epilogue 指令，停止
-        # insert_pos 是第一个 epilogue 指令的位置
+                break
         body_lines = body_lines[:insert_pos] + raii_lines + body_lines[insert_pos:]
     else:
-        # 没有显式返回，先 RAII 再 leave/ret
         lines.extend(body_lines)
         lines.extend(raii_lines)
         if func.returns_void:
@@ -344,9 +359,12 @@ def _emit_function(
         return lines
 
     lines.extend(body_lines)
-
     return lines
 
+
+# ---------------------------------------------------------------------------
+# 指令编译（核心）
+# ---------------------------------------------------------------------------
 
 def _emit_insns(
     insns: list[Insn],
@@ -354,9 +372,36 @@ def _emit_insns(
     struct_vars: set[str],
     ctx: _CodegenContext,
 ) -> tuple[list[str], dict[str, int]]:
+    """将指令序列编译为 NASM 行列表。
+    维护一个编译时类型栈 ty_stack，用于 print 等需要类型信息的指令。
+    """
     lines: list[str] = []
     label_map: dict[str, int] = {}
 
+    KVAL_INT = "int"
+    KVAL_FLOAT = "float"
+    KVAL_STR = "str"
+
+    ty_stack: list[str] = []
+
+    def push_int():
+        ty_stack.append(KVAL_INT)
+
+    def push_float():
+        ty_stack.append(KVAL_FLOAT)
+
+    def push_str():
+        ty_stack.append(KVAL_STR)
+
+    def pop_type() -> str:
+        return ty_stack.pop() if ty_stack else KVAL_INT
+
+    def pop_types(n: int) -> list[str]:
+        types = [ty_stack.pop() for _ in range(n)]
+        types.reverse()
+        return types
+
+    # 先收集标签位置
     for i, insn in enumerate(insns):
         if insn and insn[0] == "label":
             label_map[insn[1]] = i
@@ -377,32 +422,37 @@ def _emit_insns(
             val = insn[1]
             if isinstance(val, bool):
                 lines.append(f"    push {1 if val else 0}")
+                push_int()
             elif isinstance(val, int):
                 lines.append(f"    push {val}")
+                push_int()
             elif isinstance(val, float):
                 import struct
                 b = struct.pack("<d", val)
                 lo = int.from_bytes(b[:8], "little")
                 lines.append(f"    mov rax, {lo}")
-                lines.append(f"    push rax  ; float {val}")
+                lines.append("    push rax")
+                push_float()
             elif isinstance(val, str):
+                # 修复：x64 下不能 push 64 位立即数，必须先加载到寄存器
                 sidx = ctx.add_string(val)
-                lines.append(f"    push str_{sidx}")
+                lines.append(f"    lea rax, [rel str_{sidx}]")
+                lines.append("    push rax")
+                push_str()
             else:
                 lines.append("    push 0")
+                push_int()
 
         elif op == "load":
             name = insn[1]
             if name in locals_map:
                 slot = locals_map[name]
-                if name in struct_vars:
-                    lines.append(f"    push qword [rbp - {slot.offset}]")
-                else:
-                    lines.append(f"    push qword [rbp - {slot.offset}]")
+                lines.append(f"    push qword [rbp - {slot.offset}]")
             else:
                 slot = _VarSlot(name=name, offset=(len(locals_map) + 1) * 8)
                 locals_map[name] = slot
                 lines.append(f"    push qword [rbp - {slot.offset}]")
+            push_int()
 
         elif op == "load_scoped":
             _, scope, name = insn
@@ -414,6 +464,7 @@ def _emit_insns(
                 slot = _VarSlot(name=full_name, offset=(len(locals_map) + 1) * 8)
                 locals_map[full_name] = slot
                 lines.append(f"    push qword [rbp - {slot.offset}]")
+            push_int()
 
         elif op == "store":
             name = insn[1]
@@ -426,6 +477,7 @@ def _emit_insns(
                 locals_map[name] = slot
                 lines.append("    pop rax")
                 lines.append(f"    mov [rbp - {slot.offset}], rax")
+            pop_type()
 
         elif op == "store_scoped_assign":
             _, scope, name = insn
@@ -439,6 +491,7 @@ def _emit_insns(
                 locals_map[full_name] = slot
                 lines.append("    pop rax")
                 lines.append(f"    mov [rbp - {slot.offset}], rax")
+            pop_type()
 
         elif op == "get_attr":
             attr = insn[1]
@@ -452,9 +505,10 @@ def _emit_insns(
                     found = True
                     break
             if not found:
-                lines.append(f"    ; get_attr '{attr}' - struct layout unknown")
                 lines.append("    pop rax")
                 lines.append("    push 0")
+            pop_type()
+            push_int()
 
         elif op == "set_attr":
             attr = insn[1]
@@ -465,14 +519,16 @@ def _emit_insns(
                     lines.append("    pop rax")
                     lines.append("    pop rbx")
                     lines.append(f"    mov [rbx + {off}], rax")
-                    lines.append("    push 0  ; assign result")
+                    lines.append("    push 0")
                     found = True
                     break
             if not found:
-                lines.append(f"    ; set_attr '{attr}' - struct layout unknown")
                 lines.append("    pop rax")
                 lines.append("    pop rbx")
                 lines.append("    push 0")
+            pop_type()
+            pop_type()
+            push_int()
 
         elif op == "binop":
             bn = insn[1]
@@ -484,6 +540,9 @@ def _emit_insns(
                 lines.append(f"    set{cc} al")
                 lines.append("    movzx eax, al")
                 lines.append("    push rax")
+                pop_type()
+                pop_type()
+                push_int()
             elif bn in ("flt", "fle", "fgt", "fge", "feq", "fne"):
                 cc = _fcmp_nasm(bn)
                 lines.append("    pop rbx")
@@ -494,6 +553,9 @@ def _emit_insns(
                 lines.append(f"    set{cc} al")
                 lines.append("    movzx eax, al")
                 lines.append("    push rax")
+                pop_type()
+                pop_type()
+                push_int()
             elif bn in ("fadd", "fsub", "fmul", "fdiv"):
                 nasm_op = {"fadd": "addsd", "fsub": "subsd", "fmul": "mulsd", "fdiv": "divsd"}[bn]
                 lines.append("    pop rbx")
@@ -503,18 +565,27 @@ def _emit_insns(
                 lines.append(f"    {nasm_op} xmm0, xmm1")
                 lines.append("    movq rax, xmm0")
                 lines.append("    push rax")
+                pop_type()
+                pop_type()
+                push_float()
             elif bn == "div":
                 lines.append("    pop rbx")
                 lines.append("    pop rax")
                 lines.append("    cqo")
                 lines.append("    idiv rbx")
                 lines.append("    push rax")
+                pop_type()
+                pop_type()
+                push_int()
             elif bn == "mod":
                 lines.append("    pop rbx")
                 lines.append("    pop rax")
                 lines.append("    cqo")
                 lines.append("    idiv rbx")
                 lines.append("    push rdx")
+                pop_type()
+                pop_type()
+                push_int()
             else:
                 nasm_op = _binop_nasm(bn)
                 if nasm_op:
@@ -522,6 +593,9 @@ def _emit_insns(
                     lines.append("    pop rax")
                     lines.append(f"    {nasm_op} rax, rbx")
                     lines.append("    push rax")
+                    pop_type()
+                    pop_type()
+                    push_int()
                 else:
                     lines.append(f"    ; unsupported binop: {bn}")
 
@@ -533,27 +607,36 @@ def _emit_insns(
                 lines.append("    setz al")
                 lines.append("    movzx eax, al")
                 lines.append("    push rax")
+                pop_type()
+                push_int()
             elif un == "fneg":
                 lines.append("    pop rax")
                 lines.append("    movq xmm0, rax")
                 lines.append("    xorpd xmm0, [sign_mask]")
                 lines.append("    movq rax, xmm0")
                 lines.append("    push rax")
+                pop_type()
+                push_float()
             elif un == "deref":
                 lines.append("    pop rax")
                 lines.append("    mov rax, [rax]")
                 lines.append("    push rax")
+                pop_type()
+                push_int()
             else:
                 nasm_op = _unary_nasm(un)
                 if nasm_op:
                     lines.append("    pop rax")
                     lines.append(f"    {nasm_op} rax")
                     lines.append("    push rax")
+                    pop_type()
+                    push_int()
                 else:
                     lines.append(f"    ; unsupported unary: {un}")
 
         elif op == "pop":
             lines.append("    add rsp, 8")
+            pop_type()
 
         elif op == "decl":
             ty, name = insn[1], insn[2]
@@ -561,8 +644,6 @@ def _emit_insns(
                 slot = locals_map[name]
                 if name in struct_vars:
                     sz = slot.size
-                    lines.append(f"    ; decl struct {ty} {name} (heap, size={sz})")
-                    # 堆分配的 struct: 加载堆指针，清零堆内存
                     lines.append(f"    mov rdi, [rbp - {slot.offset}]")
                     lines.append("    xor eax, eax")
                     lines.append("    mov ecx, %d" % (sz // 8))
@@ -576,18 +657,19 @@ def _emit_insns(
                 slot = locals_map[name]
                 lines.append("    pop rax")
                 lines.append(f"    mov [rbp - {slot.offset}], rax")
+                pop_type()
 
         elif op == "store_deref":
             lines.append("    pop rax")
             lines.append("    pop rbx")
             lines.append("    mov [rbx], rax")
+            pop_type()
+            pop_type()
 
         elif op == "delete":
-            # Kval 的 delete：释放堆分配变量
             for name in insn[1:]:
                 if name in locals_map and name in struct_vars:
                     slot = locals_map[name]
-                    lines.append(f"    ; delete {name} (heap free)")
                     lines.append(f"    mov rcx, [rbp - {slot.offset}]")
                     lines.append("    test rcx, rcx")
                     lines.append("    jz _no_ptr_{slot.offset}")
@@ -606,19 +688,28 @@ def _emit_insns(
         elif op == "call":
             _, fname, nargs, kw_order = insn
             if tuple(kw_order):
+                # 关键字参数暂不处理，直接弹出并压入占位值
                 for _ in range(nargs):
                     lines.append("    add rsp, 8")
+                    pop_type()
                 lines.append("    push 0")
+                push_int()
             elif fname == "print":
-                ctx.main_has_print = True
-                _emit_print_call(lines, nargs, ctx)
+                # 利用类型栈生成正确的 printf 调用
+                arg_types = pop_types(nargs)
+                _emit_print_call(lines, arg_types, ctx)
+                push_int()
             else:
+                for _ in range(nargs):
+                    pop_type()
                 _emit_func_call(lines, fname, nargs, ctx)
+                push_int()
 
         elif op == "ret":
             lines.append("    pop rax")
             lines.append("    leave")
             lines.append("    ret")
+            pop_type()
 
         elif op == "retvoid":
             lines.append("    xor eax, eax")
@@ -632,17 +723,22 @@ def _emit_insns(
             lines.append("    pop rax")
             lines.append("    test rax, rax")
             lines.append(f"    jz {_sanitize_label(insn[1])}")
+            pop_type()
 
         elif op == "jnz":
             lines.append("    pop rax")
             lines.append("    test rax, rax")
             lines.append(f"    jnz {_sanitize_label(insn[1])}")
+            pop_type()
 
         elif op == "define":
-            lines.append(f"    ; define {insn[1]} (already collected)")
+            lines.append(f"    ; define {insn[1]}")
 
         elif op == "class_def":
-            lines.append(f"    ; class_def {insn[1]} (layout recorded)")
+            lines.append(f"    ; class_def {insn[1]}")
+
+        elif op == "extern_dll":
+            lines.append(f"    ; extern_dll {insn[1]}")
 
         else:
             lines.append(f"    ; unknown insn: {op}")
@@ -652,29 +748,86 @@ def _emit_insns(
     return lines, label_map
 
 
-def _emit_print_call(lines: list[str], nargs: int, ctx: _CodegenContext) -> None:
-    for _ in range(nargs):
-        if ctx.win64:
-            lines.append("    pop rdx")
-            lines.append("    sub rsp, 32")
-            lines.append("    lea rcx, [fmt_int]")
+# ---------------------------------------------------------------------------
+# 库函数调用生成
+# ---------------------------------------------------------------------------
+
+def _emit_print_call(lines: list[str], arg_types: list[str], ctx: _CodegenContext) -> None:
+    """根据参数类型动态构造格式串，生成一次 printf 调用。
+    遵循 Win64 / SysV 调用约定，格式串放入第一个寄存器，
+    其余参数依次使用寄存器，超出部分通过栈传递。
+    """
+    nargs = len(arg_types)
+    if nargs == 0:
+        return
+
+    # 1. 动态构造格式串（如 "%s %d"）
+    fmt_parts = []
+    for t in arg_types:
+        if t == "int":
+            fmt_parts.append("%d")
+        elif t == "float":
+            fmt_parts.append("%f")
+        elif t == "str":
+            fmt_parts.append("%s")
         else:
-            lines.append("    pop rsi")
-            lines.append("    lea rdi, [fmt_int]")
-        lines.append("    xor eax, eax")
-        lines.append("    call printf")
-        if ctx.win64:
-            lines.append("    add rsp, 32")
+            fmt_parts.append("%d")
+    fmt_str = " ".join(fmt_parts) + "\n"
+    fmt_idx = ctx.add_string(fmt_str)  # 数据段生成时会自动追加 '\0'
+
+    # 2. 寄存器约定
+    if ctx.win64:
+        regs = ["rcx", "rdx", "r8", "r9"]
+        shadow = 32
+    else:
+        regs = ["rdi", "rsi", "rdx", "rcx", "r8", "r9"]
+        shadow = 0
+
+    # 第一个参数固定为格式串，剩余的用于实际参数
+    max_reg_args = len(regs) - 1
+    reg_args = min(nargs, max_reg_args)
+    overflow = nargs - reg_args
+
+    # 临时寄存器分配
+    temp = ["r10", "r11", "r12", "r13", "r14", "r15"][:nargs + 1]
+    fmt_temp = temp[0]
+    arg_temps = temp[1:]
+
+    # 3. 将格式串地址加载到临时寄存器，并从栈弹出参数到临时寄存器
+    lines.append(f"    lea {fmt_temp}, [rel str_{fmt_idx}]")
+    for i in range(nargs - 1, -1, -1):
+        lines.append(f"    pop {arg_temps[i]}")
+
+    # 4. 分配栈空间（影子空间 + 溢出参数）
+    stack_space = shadow + overflow * 8
+    stack_space = (stack_space + 15) & ~15
+    if stack_space > 0:
+        lines.append(f"    sub rsp, {stack_space}")
+
+    # 5. 移动参数到正式位置
+    lines.append(f"    mov {regs[0]}, {fmt_temp}")
+    for i in range(reg_args):
+        lines.append(f"    mov {regs[i + 1]}, {arg_temps[i]}")
+    for i in range(overflow):
+        lines.append(f"    mov [rsp + {shadow + i * 8}], {arg_temps[reg_args + i]}")
+
+    # 6. 调用 printf
+    lines.append("    xor eax, eax")     # 可变参数函数约定：al = 使用的向量寄存器数
+    lines.append("    call printf")
+
+    # 7. 恢复栈
+    if stack_space > 0:
+        lines.append(f"    add rsp, {stack_space}")
+
+    # print 不产生返回值，但 IR 需要栈上留一个占位值
     lines.append("    push 0")
 
 
-def _emit_func_call(
-    lines: list[str],
-    fname: str,
-    nargs: int,
-    ctx: _CodegenContext,
-) -> None:
-    func_label = _sanitize_label(fname)
+def _emit_func_call(lines: list[str], fname: str, nargs: int, ctx: _CodegenContext) -> None:
+    """生成普通函数调用，参数从栈弹出并按调用约定传递。"""
+    is_extern = any(fn == fname for _, fn, _, _, _, _ in ctx.extern_dll_funcs)
+    func_label = fname if is_extern else _sanitize_label(fname)
+
     if ctx.win64:
         param_regs = ["rcx", "rdx", "r8", "r9"]
     else:
@@ -692,7 +845,7 @@ def _emit_func_call(
         for j in range(nargs):
             lines.append(f"    mov {param_regs[j]}, {temp[j]}")
     else:
-        # 简化处理：直接压栈传参
+        # 超出寄存器数量的参数已在栈上（调用者负责清理）
         pass
 
     if ctx.win64:
@@ -704,17 +857,96 @@ def _emit_func_call(
     lines.append("    push rax")
 
 
+# ---------------------------------------------------------------------------
+# 顶层入口：生成完整 NASM 文件
+# ---------------------------------------------------------------------------
+
+def _build_code_lines(
+    ctx: _CodegenContext,
+    top_insns: list[Insn],
+    main_func: _FuncInfo | None,
+    output_type: str,
+    macho: bool,
+    entry_label: str,
+) -> list[str]:
+    """生成所有代码段行（函数体 + 入口点），同时会触发 ctx.add_string 收集缺失的字符串。"""
+    code_lines: list[str] = []
+
+    # 输出各函数
+    for func in ctx.funcs:
+        fn_lines = _emit_function(func, ctx)
+        code_lines.extend(fn_lines)
+        code_lines.append("")
+
+    # 入口点
+    if output_type == "dll":
+        code_lines.append("global DllMain")
+        code_lines.append("global kval_main")
+        if main_func:
+            for func in ctx.funcs:
+                if func.name != "main":
+                    code_lines.append(f"global {func.label}")
+        code_lines.append("")
+        code_lines.append("DllMain:")
+        code_lines.append("    mov rax, 1")
+        code_lines.append("    ret")
+        code_lines.append("")
+        code_lines.append("kval_main:")
+        code_lines.append("    push rbp")
+        code_lines.append("    mov rbp, rsp")
+        code_lines.append("    sub rsp, 32")
+        if main_func:
+            code_lines.append(f"    call {main_func.label}")
+        else:
+            top_locals: dict[str, _VarSlot] = {}
+            struct_vars: set[str] = set()
+            _scan_locals(tuple(top_insns), top_locals, struct_vars, ctx)
+            exec_insns = [insn for insn in top_insns if insn[0] not in ("define", "class_def")]
+            body_lines, _ = _emit_insns(exec_insns, top_locals, struct_vars, ctx)
+            code_lines.extend(body_lines)
+        code_lines.append("    leave")
+        code_lines.append("    ret")
+    else:
+        code_lines.append(f"global {entry_label}")
+        code_lines.append(f"{entry_label}:")
+        if main_func:
+            code_lines.append("    push rbp")
+            code_lines.append("    mov rbp, rsp")
+            code_lines.append("    sub rsp, 32")
+            code_lines.append(f"    call {main_func.label}")
+            code_lines.append("    leave")
+            code_lines.append("    ret")
+        else:
+            code_lines.append("    push rbp")
+            code_lines.append("    mov rbp, rsp")
+            code_lines.append("    sub rsp, 32")
+            top_locals2: dict[str, _VarSlot] = {}
+            struct_vars2: set[str] = set()
+            _scan_locals(tuple(top_insns), top_locals2, struct_vars2, ctx)
+            exec_insns2 = [insn for insn in top_insns if insn[0] not in ("define", "class_def")]
+            body_lines2, _ = _emit_insns(exec_insns2, top_locals2, struct_vars2, ctx)
+            code_lines.extend(body_lines2)
+            code_lines.append("    xor eax, eax")
+            code_lines.append("    leave")
+            code_lines.append("    ret")
+
+    return code_lines
+
+
 def generate_nasm(
     module_insns: tuple[Insn, ...],
     *,
     win64: bool = False,
     macho: bool = False,
+    output_type: str = "exe",
 ) -> str:
+    """将整个模块的 IR 转换为 NASM 汇编源码字符串。"""
     ctx = _CodegenContext(win64=win64)
 
     _collect_strings_from_insns(module_insns, ctx)
     _build_struct_layouts(module_insns, ctx)
 
+    # 分离顶层指令和函数定义
     top_insns: list[Insn] = []
     for insn in module_insns:
         if not insn:
@@ -735,10 +967,7 @@ def generate_nasm(
 
     ctx.main_body = tuple(top_insns)
 
-    if ctx.main_has_print or not ctx.str_literals:
-        ctx.add_string("%d")
-
-    # 预扫描所有函数中的 struct 使用，以决定是否需要 extern malloc/free
+    # 预扫描函数，决定是否需要 malloc/free
     for func in ctx.funcs:
         dummy_slots: dict[str, _VarSlot] = {}
         dummy_structs: set[str] = set()
@@ -746,66 +975,46 @@ def generate_nasm(
         if dummy_structs:
             ctx.note_malloc_used()
 
-    lines: list[str] = []
     extern_label = "_printf" if macho else "printf"
     entry_label = "_main" if macho else "main"
+    main_func = next((f for f in ctx.funcs if f.name == "main"), None)
 
+    # 第一遍：仅收集字符串（运行代码生成但丢弃结果）
+    _build_code_lines(ctx, top_insns, main_func, output_type, macho, entry_label)
+
+    # 构建最终输出
+    lines: list[str] = []
+
+    # 头部：外部符号声明
     lines.append("default rel")
     lines.append(f"extern {extern_label}")
     if ctx._has_malloc:
         lines.append("extern malloc")
         lines.append("extern free")
+    if output_type == "dll" and win64:
+        lines.append("extern ExitProcess")
+    for _, func_name, _, _, _, _ in ctx.extern_dll_funcs:
+        lines.append(f"extern {func_name}")
     lines.append("")
 
-    # Data section
+    # 数据段（此时 ctx.str_literals 已完整）
     lines.append("section .data")
-    lines.append('    fmt_int db "%d", 10, 0')
     lines.append("    sign_mask dq 0x8000000000000000")
     for i, s in enumerate(ctx.str_literals):
-        if s == "%d":
-            continue
-        b = s.encode("utf-8") + b"\n\0"
+        b = s.encode("utf-8") + b"\0"
         bytes_str = ", ".join(str(x) for x in b)
         lines.append(f"    str_{i} db {bytes_str}")
     lines.append("")
 
-    # Text section
+    # 代码段头部
     lines.append("section .text")
     for func in ctx.funcs:
         lines.append(f"global {func.label}")
     lines.append("")
 
-    for func in ctx.funcs:
-        fn_lines = _emit_function(func, ctx)
-        lines.extend(fn_lines)
-        lines.append("")
-
-    # main 入口
-    lines.append(f"global {entry_label}")
-    lines.append(f"{entry_label}:")
-
-    main_func = next((f for f in ctx.funcs if f.name == "main"), None)
-
-    if main_func:
-        lines.append("    push rbp")
-        lines.append("    mov rbp, rsp")
-        lines.append("    sub rsp, 32")
-        lines.append(f"    call {main_func.label}")
-        lines.append("    leave")
-        lines.append("    ret")
-    else:
-        lines.append("    push rbp")
-        lines.append("    mov rbp, rsp")
-        lines.append("    sub rsp, 32")
-        top_locals: dict[str, _VarSlot] = {}
-        struct_vars: set[str] = set()
-        _scan_locals(tuple(top_insns), top_locals, struct_vars, ctx)
-        exec_insns = [insn for insn in top_insns if insn[0] not in ("define", "class_def")]
-        body_lines, _ = _emit_insns(exec_insns, top_locals, struct_vars, ctx)
-        lines.extend(body_lines)
-        lines.append("    xor eax, eax")
-        lines.append("    leave")
-        lines.append("    ret")
+    # 第二遍：正式生成代码段
+    code_lines = _build_code_lines(ctx, top_insns, main_func, output_type, macho, entry_label)
+    lines.extend(code_lines)
 
     lines.append("")
     return "\n".join(lines) + "\n"

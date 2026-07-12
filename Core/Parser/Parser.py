@@ -13,6 +13,7 @@ from .AST.ASE import (
     DeleteStmtNode,
     DerefAssignStmtNode,
     ExprStmtNode,
+    ExternDllDeclNode,
     ForCStmtNode,
     ForRangeStmtNode,
     FunctionDefNode,
@@ -172,6 +173,8 @@ class Parser:
             return self.parse_import_stmt()
         if t == "FROM":
             return self.parse_from_import_stmt()
+        if t == "EXTERN":
+            return self.parse_extern_decl()
         if t == "EXPORT":
             self.eat("EXPORT")
             st = self.parse_stmt()
@@ -803,6 +806,25 @@ class Parser:
         if not catches and finally_block is None:
             raise ParseError("try 语句至少需要 catch 或 finally")
         return TryStmtNode(try_block, catches, else_block, finally_block)
+
+    def parse_extern_decl(self) -> ExternDllDeclNode:
+        """解析 extern "dll_path" { func_sig; func_sig; ... }"""
+        self.eat("EXTERN")
+        dll_path = self.eat("STRING_LIT").value
+        self.eat("LBRACE")
+        funcs: list[tuple[str, str, list[str], list[str], bool]] = []
+        while self.cur().type != "RBRACE":
+            ret_type = self.parse_type_token()
+            ret_type = self._consume_type_ptr_ref_suffix(ret_type)
+            returns_void = ret_type == "void"
+            func_name = self.eat("IDENT").value
+            self.eat("LPAREN")
+            pt, pn = self.parse_param_list()
+            self.eat("RPAREN")
+            self.eat("SEMI")
+            funcs.append((ret_type, func_name, pt, pn, returns_void))
+        self.eat("RBRACE")
+        return ExternDllDeclNode(dll_path, funcs)
 
     def parse_import_stmt(self) -> ImportStmtNode:
         self.eat("IMPORT")

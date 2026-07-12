@@ -1,0 +1,18 @@
+// 测试 extern DLL 导入功能
+// 使用 Windows kernel32.dll 的 Sleep 和 GetTickCount 函数
+
+extern "kernel32.dll" {
+    void Sleep(int dwMilliseconds);
+    int GetTickCount();
+}
+
+int main() {
+    int start = GetTickCount();
+    print(start);
+    Sleep(100);
+    int end = GetTickCount();
+    print(end);
+    int elapsed = end - start;
+    print(elapsed);
+    return 0;
+}

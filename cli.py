@@ -162,6 +162,12 @@ def main(argv: list[str] | None = None) -> int:
         help="与 --compile-type AOT 合用：生成不依赖 Python 的本机 exe/ELF（仅支持可静态求值子集）；省略则仍为 stub + .kbin",
     )
     p_comp.add_argument(
+        "--aot-output-type",
+        choices=("exe", "dll"),
+        default="exe",
+        help="与 --aot-native 合用：exe=可执行文件（默认）；dll=动态链接库，导出 DllMain + kval_main",
+    )
+    p_comp.add_argument(
         "--kir3",
         action="store_true",
         help="输出 .kir3 格式（C VM 字节码），由 kval_vm 执行",
@@ -244,7 +250,11 @@ def main(argv: list[str] | None = None) -> int:
             if out_path is None and not args.dump_asm:
                 inp = Path(args.input)
                 if args.compile_type == "AOT":
-                    out_path = str(inp.with_suffix(".exe") if sys.platform == "win32" else inp.parent / inp.stem)
+                    if args.aot_native and args.aot_output_type == "dll":
+                        ext = ".dll" if sys.platform == "win32" else ".so"
+                    else:
+                        ext = ".exe" if sys.platform == "win32" else ""
+                    out_path = str(inp.with_suffix(ext)) if ext else str(inp.parent / inp.stem)
                 else:
                     out_path = str(inp.with_suffix(".kir"))
 
@@ -256,6 +266,7 @@ def main(argv: list[str] | None = None) -> int:
                             out_path,
                             keep_launcher_c=args.aot_keep_c,
                             native_executable=args.aot_native,
+                            output_type=args.aot_output_type if args.aot_native else "exe",
                         )
                         print(exe)
                     except AOTToolBootstrapFailed as e:

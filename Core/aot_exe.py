@@ -73,12 +73,18 @@ class AOTToolBootstrapFailed(AOTExecutableError):
     """本机 AOT：在写出 .asm 等产物之前，NASM/GoLink 自动下载或安装失败。"""
 
 
-def normalize_aot_executable_output(out: Path) -> Path:
+def normalize_aot_executable_output(out: Path, output_type: str = "exe") -> Path:
     out = Path(out)
     if out.suffix.lower() == ".kbin":
         raise AOTExecutableError(
             "AOT: -o 须为可执行文件路径（如 app.exe 或 ./myapp），同目录会生成同名 .kbin"
         )
+    if output_type == "dll":
+        # DLL 模式: 允许 .dll (Windows) 或 .so (Linux) 或 .dylib (macOS)
+        if sys.platform == "win32" and out.suffix.lower() != ".dll":
+            return out.with_suffix(".dll")
+        return out
+    # EXE 模式
     if sys.platform == "win32" and out.suffix.lower() != ".exe":
         return out.with_suffix(".exe")
     return out

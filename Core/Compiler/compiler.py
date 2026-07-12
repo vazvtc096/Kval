@@ -47,6 +47,7 @@ class Compiler:
         *,
         keep_launcher_c: bool = False,
         native_executable: bool = False,
+        output_type: str = "exe",
     ) -> Path:
         if native_executable:
             from ..aot_native import build_standalone_native_exe
@@ -55,6 +56,7 @@ class Compiler:
                 module=module,
                 exe_out=Path(out),
                 keep_sources=keep_launcher_c,
+                output_type=output_type,
             )
         return build_native_stub_exe(
             kbin_bytes=self.serialize(module),

@@ -449,6 +449,109 @@ def _load_module_exports(module_name: str, importer_file: str | None, relative_l
         module_loading.discard(key)
 
 
+class ExternDllDeclNode(ASTNode):
+    """声明从外部 DLL 导入函数签名。
+
+    extern "kernel32.dll" {
+        int GetProcAddress(int handle, string name);
+        void FreeLibrary(int handle);
+    }
+
+    每个函数签名为 (return_type, func_name, param_types, param_names, returns_void)。
+    """
+
+    def __init__(self, dll_path: str, funcs: list[tuple[str, str, list[str], list[str], bool]]):
+        self.dll_path = dll_path
+        self.funcs = funcs
+
+    def evaluate(self):
+        import ctypes as _ct
+
+        sf = stack[-1]
+        # 加载 DLL
+        try:
+            if sys.platform == "win32":
+                dll = _ct.windll.LoadLibrary(self.dll_path)
+            else:
+                dll = _ct.cdll.LoadLibrary(self.dll_path)
+        except OSError as e:
+            raise RuntimeError(f"extern: 无法加载 DLL '{self.dll_path}': {e}") from e
+
+        # 类型映射：Kval 类型名 → ctypes 类型
+        _TYPE_MAP = {
+            "int": _ct.c_int,
+            "float": _ct.c_double,
+            "bool": _ct.c_int,
+            "string": _ct.c_char_p,
+            "void": None,
+        }
+
+        def _resolve_ctypes_type(t: str):
+            if t in _TYPE_MAP:
+                return _TYPE_MAP[t]
+            if t.endswith("*"):
+                base = t[:-1]
+                base_ct = _TYPE_MAP.get(base, _ct.c_void_p)
+                return _ct.POINTER(base_ct)
+            return _ct.c_void_p
+
+        for ret_type, func_name, param_types, param_names, returns_void in self.funcs:
+            try:
+                raw_func = getattr(dll, func_name)
+            except AttributeError as e:
+                raise RuntimeError(f"extern: DLL '{self.dll_path}' 中找不到函数 '{func_name}': {e}") from e
+
+            # 设置 ctypes 参数和返回类型
+            raw_func.argtypes = [_resolve_ctypes_type(pt) for pt in param_types]
+            raw_func.restype = _resolve_ctypes_type(ret_type)
+
+            # 创建 Kval 可调用的包装器
+            def _make_wrapper(rf, pn, pt, rv):
+                def wrapper(*args, **kwargs):
+                    call_args = []
+                    for i, n in enumerate(pn):
+                        if n in kwargs:
+                            v = kwargs[n]
+                        elif i < len(args):
+                            v = args[i]
+                        else:
+                            raise TypeError(f"extern 函数缺少参数 {n!r}")
+                        # string 类型需要编码为 bytes
+                        if pt[i] == "string" and isinstance(v, str):
+                            v = v.encode("utf-8")
+                        call_args.append(v)
+                    result = rf(*call_args)
+                    if rv:
+                        return 0  # void 返回 0
+                    if isinstance(result, bytes):
+                        return result.decode("utf-8", errors="replace")
+                    if isinstance(result, _ct.Array):
+                        # c_char_p 返回的 bytes
+                        return bytes(result).decode("utf-8", errors="replace")
+                    return result
+                return wrapper
+
+            wrapper = _make_wrapper(raw_func, param_names, param_types, returns_void)
+            wrapper.__name__ = func_name
+            wrapper.__kval_dll_extern__ = True
+            wrapper.__kval_dll_path__ = self.dll_path
+            wrapper.__kval_param_types__ = param_types
+            wrapper.__kval_param_names__ = param_names
+            wrapper.__kval_return_type__ = ret_type
+            wrapper.__kval_returns_void__ = returns_void
+
+            sf.register_var_decl(func_name, None)
+            sf.setvar_decl_local(func_name, wrapper)
+
+    def bytecode(self):
+        return []
+
+    def asm(self, ctx: AsmContext) -> list[Insn]:
+        return [("extern_dll", self.dll_path, tuple(
+            (rt, fn, tuple(pt), tuple(pn), int(rv)) for rt, fn, pt, pn, rv in self.funcs
+        ))]
+
+
 class ImportStmtNode(ASTNode):
     def __init__(self, items: list[tuple[int, str, str | None]]):
         self.items = items

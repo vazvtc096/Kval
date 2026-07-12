@@ -121,6 +121,9 @@ class InsnVM:
             self._do_define(insn)
         elif op == "class_def":
             self._do_class_def(insn)
+        elif op == "extern_dll":
+            # extern DLL 函数已通过 ExternDllDeclNode.evaluate() 注册到作用域，此处跳过
+            pass
         elif op == "call":
             self._do_call(insn)
         elif op == "call_indirect":

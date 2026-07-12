@@ -63,6 +63,7 @@ KEYWORDS = {
     "as": "AS",
     "export": "EXPORT",
     "namespace": "NAMESPACE",
+    "extern": "EXTERN",
 }
 
 

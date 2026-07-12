@@ -10,6 +10,7 @@ from .Parser.AST.ASE import (
     DeleteStmtNode,
     DerefAssignStmtNode,
     ExprStmtNode,
+    ExternDllDeclNode,
     ForCStmtNode,
     ForRangeStmtNode,
     FromImportStmtNode,
@@ -997,6 +998,21 @@ def _check_stmt(
             bind = alias or name
             if env.lookup(bind) is None:
                 env.declare(bind, "imported")
+        return
+
+    if isinstance(s, ExternDllDeclNode):
+        for ret_type, func_name, param_types, param_names, returns_void in s.funcs:
+            # 将 extern 函数注册到类型环境中
+            env.declare(func_name, ret_type if not returns_void else "imported")
+            # 注册函数签名到 func_sigs，以便调用时做类型检查
+            sig: FuncSig = (
+                tuple(param_types),
+                tuple(param_names),
+                ret_type,
+                returns_void,
+                (),
+            )
+            func_sigs.setdefault(func_name, []).append(sig)
         return
 
     if isinstance(s, NamespaceDefNode):
