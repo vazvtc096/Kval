@@ -70,6 +70,8 @@ class _CodegenContext:
         default_factory=list, repr=False
     )
     extern_dll_names: dict[str, list[str]] = field(default_factory=dict, repr=False)
+    # 模块级 export 修饰的函数名（AOT DLL 模式下需导出原始名称别名）
+    export_names: set[str] = field(default_factory=set, repr=False)
 
     def add_string(self, s: str) -> int:
         if s not in self._str_index:
@@ -877,6 +879,11 @@ def _build_code_lines(
         fn_lines = _emit_function(func, ctx)
         code_lines.extend(fn_lines)
         code_lines.append("")
+        # export 函数的原始名称别名（DLL 模式下供外部调用）
+        if func.name in ctx.export_names and output_type == "dll" and func.name != "main":
+            code_lines.append(f"{func.name}:")
+            code_lines.append(f"    jmp {func.label}")
+            code_lines.append("")
 
     # 入口点
     if output_type == "dll":
@@ -886,6 +893,11 @@ def _build_code_lines(
             for func in ctx.funcs:
                 if func.name != "main":
                     code_lines.append(f"global {func.label}")
+        # export 修饰的函数需要同时以原始名称导出（供 C 客户端使用）
+        for func in ctx.funcs:
+            if func.name in ctx.export_names and func.name != "main":
+                # 生成别名：原始名称指向 sanitize 后的标签
+                code_lines.append(f"global {func.name}")
         code_lines.append("")
         code_lines.append("DllMain:")
         code_lines.append("    mov rax, 1")
@@ -939,9 +951,16 @@ def generate_nasm(
     win64: bool = False,
     macho: bool = False,
     output_type: str = "exe",
+    export_names: set[str] | None = None,
 ) -> str:
-    """将整个模块的 IR 转换为 NASM 汇编源码字符串。"""
+    """将整个模块的 IR 转换为 NASM 汇编源码字符串。
+
+    export_names: 模块中被 export 修饰的函数名集合。
+    DLL 模式下，这些函数会同时以原始名称导出。
+    """
     ctx = _CodegenContext(win64=win64)
+    if export_names:
+        ctx.export_names = export_names
 
     _collect_strings_from_insns(module_insns, ctx)
     _build_struct_layouts(module_insns, ctx)

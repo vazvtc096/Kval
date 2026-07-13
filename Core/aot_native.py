@@ -27,7 +27,13 @@ def _emit_nasm_from_module(module: Module, *, win64: bool, macho: bool, output_t
     """将模块编译为 NASM 汇编源代码。"""
     ctx = AsmContext()
     module_insns = flatten_stmt_asm(module.body.statements, ctx)
-    return generate_nasm(insns_to_tuple(module_insns), win64=win64, macho=macho, output_type=output_type)
+    return generate_nasm(
+        insns_to_tuple(module_insns),
+        win64=win64,
+        macho=macho,
+        output_type=output_type,
+        export_names=module.export_names_marked,
+    )
 
 
 def _collect_extern_dlls_from_module(module: Module) -> dict[str, list[str]]:
